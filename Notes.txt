@@ -1,6 +1,0 @@
-the member page for a specifc club is missing 
-member photo fiel is also not showing
-what are the fields we need to put for an individual member detail
-
-
-the main overview page needs to be redesing 

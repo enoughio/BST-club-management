@@ -1,0 +1,69 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Field, PageIntro } from "@/components/shell";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input, Select, Textarea } from "@/components/ui/input";
+import { ApiError, api } from "@/lib/api";
+import type { Club } from "@/lib/types";
+
+type Conversation = { id: string; subject: string; club: { name: string } | null; messages: { body: string; sender: { name: string } }[] };
+
+export default function MessagesPage() {
+  const [clubs, setClubs] = useState<Club[]>([]);
+  const [clubId, setClubId] = useState("");
+  const [rows, setRows] = useState<Conversation[]>([]);
+  const [open, setOpen] = useState<Conversation | null>(null);
+
+  function load() {
+    api<{ conversations: Conversation[] }>("/conversations").then((data) => setRows(data.conversations)).catch(() => undefined);
+  }
+  useEffect(() => {
+    api<{ clubs: Club[] }>("/clubs").then((data) => { setClubs(data.clubs); setClubId(data.clubs[0]?.id || ""); }).catch(() => undefined);
+    load();
+  }, []);
+
+  return (
+    <div>
+      <PageIntro title="Messages" lede="Write to a club’s Club Admin." />
+      <form className="mb-6 flex flex-col gap-3" onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        api("/conversations", { method: "POST", body: JSON.stringify({ clubId, subject: form.get("subject"), body: form.get("body") }) })
+          .then(() => { toast.success("Sent"); event.currentTarget.reset(); load(); })
+          .catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not send"));
+      }}>
+        <Field label="Club"><Select value={clubId} onChange={(event) => setClubId(event.target.value)}>{clubs.map((club) => <option key={club.id} value={club.id}>{club.name}</option>)}</Select></Field>
+        <Field label="Subject"><Input name="subject" required /></Field>
+        <Field label="Message"><Textarea name="body" required /></Field>
+        <Button type="submit">Send</Button>
+      </form>
+      <div className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <button key={row.id} className="text-left" onClick={() => api<{ conversation: Conversation }>(`/conversations/${row.id}`).then((data) => setOpen(data.conversation))}>
+            <Card className="p-4"><p className="font-medium">{row.subject}</p><p className="text-sm text-muted-foreground">{row.club?.name}</p></Card>
+          </button>
+        ))}
+      </div>
+      {open && (
+        <div className="mt-6 flex flex-col gap-3">
+          <h2 className="font-serif text-2xl">{open.subject}</h2>
+          {open.messages.map((message, index) => <Card key={index} className="p-3"><p className="text-sm text-muted-foreground">{message.sender.name}</p><p>{message.body}</p></Card>)}
+          <Reply id={open.id} onSent={() => api<{ conversation: Conversation }>(`/conversations/${open.id}`).then((data) => setOpen(data.conversation))} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Reply({ id, onSent }: { id: string; onSent: () => void }) {
+  const [body, setBody] = useState("");
+  return (
+    <form className="flex flex-col gap-2" onSubmit={(event) => { event.preventDefault(); api(`/conversations/${id}/messages`, { method: "POST", body: JSON.stringify({ body }) }).then(() => { setBody(""); onSent(); }); }}>
+      <Textarea value={body} onChange={(event) => setBody(event.target.value)} />
+      <Button type="submit">Reply</Button>
+    </form>
+  );
+}

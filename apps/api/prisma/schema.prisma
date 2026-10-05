@@ -1,0 +1,658 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+enum ClubStatus {
+  ACTIVE
+  INACTIVE
+  PROVISIONAL
+}
+
+enum ApplicationKind {
+  NEW
+  REINSTATE
+}
+
+enum ApplicationStatus {
+  OPEN
+  COMPLETED
+  EXPIRED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  LAPSED
+  EXPIRED
+  REMOVED
+}
+
+enum OfficerTitle {
+  PRESIDENT
+  VP_EDUCATION
+  VP_MEMBERSHIP
+  VP_PUBLIC_RELATIONS
+  SECRETARY
+  TREASURER
+  SERGEANT_AT_ARMS
+}
+
+enum ElectionStatus {
+  NOMINATION
+  VOTING
+  COMPLETED
+}
+
+enum RemovalReason {
+  RESIGNATION
+  DUES_UNPAID
+  OTHER
+}
+
+enum RemovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MeetingStatus {
+  DRAFT
+  FINALIZED
+  COMPLETED
+  CANCELLED
+}
+
+enum AgendaRole {
+  PREPARED_SPEAKER
+  TIMEKEEPER
+  FILLER_COUNTER
+  LISTENER
+  LANGUAGE_EVALUATOR
+  OPEN_MIC_COORDINATOR
+  MOC
+  CHIEF_EVALUATOR
+  SPEECH_EVALUATOR
+}
+
+enum RsvpStatus {
+  YES
+  NO
+  MAYBE
+}
+
+enum MaterialKind {
+  GUIDE
+  HANDBOOK
+  OTHER
+}
+
+enum InvoiceStatus {
+  UNPAID
+  PAID
+  WAIVED
+}
+
+enum PaymentMethod {
+  MANUAL
+  RAZORPAY
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum AnnouncementScope {
+  GLOBAL
+  CLUB
+}
+
+enum TokenPurpose {
+  INVITE
+  RESET
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String?
+  name         String
+  phone        String?
+  dateOfBirth  DateTime?
+  gender       String?
+  address      String?
+  city         String?
+  occupation   String?
+  goals        String?
+  avatarKey    String?
+  role         UserRole   @default(USER)
+  status       UserStatus @default(INVITED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  memberships         Membership[]
+  applications        MembershipApplication[] @relation("ApplicationSubject")
+  applicationsCreated MembershipApplication[] @relation("ApplicationCreator")
+  adminAppointments   ClubAdmin[]             @relation("AdminUser")
+  adminsAppointed     ClubAdmin[]             @relation("AdminAppointedBy")
+  officerRoles        OfficerRole[]
+  nominations         Nomination[]
+  votes               Vote[]
+  removalRequests     RemovalRequest[]        @relation("RemovalRequester")
+  removalSubjects     RemovalRequest[]        @relation("RemovalSubject")
+  removalDecisions    RemovalRequest[]        @relation("RemovalDecider")
+  agendaItems         AgendaItem[]            @relation("AgendaAssignee")
+  evalTargets         AgendaItem[]            @relation("EvalTarget")
+  rsvps               Rsvp[]
+  attendanceMarked    Attendance[]            @relation("MarkedBy")
+  attendanceRecords   Attendance[]            @relation("Attendee")
+  memberProjects      MemberProject[]         @relation("ProjectOwner")
+  evaluationsGiven    MemberProject[]         @relation("Evaluator")
+  certificates        Certificate[]
+  invoices            DuesInvoice[]
+  eventRegistrations  EventRegistration[]
+  announcements       Announcement[]
+  messagesSent        Message[]
+  conversationMembers ConversationParticipant[]
+  notifications       Notification[]
+  pushSubscriptions   PushSubscription[]
+  auditLogs           AuditLog[]
+  refreshTokens       RefreshToken[]
+  authTokens          AuthToken[]
+  meetingsCreated     Meeting[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model AuthToken {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose   TokenPurpose
+  tokenHash String       @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime     @default(now())
+}
+
+model Club {
+  id                     String     @id @default(cuid())
+  name                   String
+  slug                   String     @unique
+  city                   String
+  address                String?
+  meetingSchedule        String?
+  description            String?
+  charterDate            DateTime
+  status                 ClubStatus @default(ACTIVE)
+  membershipFeeAmount    Int
+  currency               String     @default("INR")
+  electionIntervalMonths Int
+  nextElectionAt         DateTime
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  memberships   Membership[]
+  applications  MembershipApplication[]
+  admins        ClubAdmin[]
+  officers      OfficerRole[]
+  elections     Election[]
+  removals      RemovalRequest[]
+  series        MeetingSeries[]
+  meetings      Meeting[]
+  announcements Announcement[]
+  conversations Conversation[]
+  invoices      DuesInvoice[]
+  events        Event[]
+}
+
+model MembershipApplication {
+  id              String            @id @default(cuid())
+  clubId          String
+  club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  email           String
+  kind            ApplicationKind
+  formJson        Json?
+  token           String            @unique
+  status          ApplicationStatus @default(OPEN)
+  razorpayOrderId String?
+  userId          String?
+  user            User?             @relation("ApplicationSubject", fields: [userId], references: [id], onDelete: SetNull)
+  expiresAt       DateTime
+  createdById     String?
+  createdBy       User?             @relation("ApplicationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([clubId, status])
+  @@index([email])
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clubId    String
+  club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  status    MembershipStatus @default(ACTIVE)
+  joinedAt  DateTime         @default(now())
+  endedAt   DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, clubId])
+  @@index([clubId, status])
+}
+
+model ClubAdmin {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation("AdminUser", fields: [userId], references: [id], onDelete: Cascade)
+  clubId        String
+  club          Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  appointedAt   DateTime  @default(now())
+  endedAt       DateTime?
+  appointedById String?
+  appointedBy   User?     @relation("AdminAppointedBy", fields: [appointedById], references: [id], onDelete: SetNull)
+
+  @@index([clubId, endedAt])
+  @@index([userId, endedAt])
+}
+
+model OfficerRole {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clubId     String
+  club       Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  title      OfficerTitle
+  startedAt  DateTime     @default(now())
+  endedAt    DateTime?
+  electionId String?
+  election   Election?    @relation(fields: [electionId], references: [id], onDelete: SetNull)
+
+  @@index([clubId, endedAt])
+  @@index([clubId, title, endedAt])
+  @@index([userId, endedAt])
+}
+
+model Election {
+  id               String         @id @default(cuid())
+  clubId           String
+  club             Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  status           ElectionStatus @default(NOMINATION)
+  nominationOpens  DateTime
+  nominationCloses DateTime
+  votingOpens      DateTime
+  votingCloses     DateTime
+  completedAt      DateTime?
+  createdAt        DateTime       @default(now())
+
+  nominations Nomination[]
+  votes       Vote[]
+  officers    OfficerRole[]
+
+  @@index([clubId, status])
+}
+
+model Nomination {
+  id         String       @id @default(cuid())
+  electionId String
+  election   Election     @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      OfficerTitle
+  createdAt  DateTime     @default(now())
+
+  @@unique([electionId, userId, title])
+}
+
+model Vote {
+  id          String       @id @default(cuid())
+  electionId  String
+  election    Election     @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  voterId     String
+  voter       User         @relation(fields: [voterId], references: [id], onDelete: Cascade)
+  title       OfficerTitle
+  candidateId String
+  createdAt   DateTime     @default(now())
+
+  @@unique([electionId, voterId, title])
+  @@index([electionId, title])
+}
+
+model RemovalRequest {
+  id          String        @id @default(cuid())
+  clubId      String
+  club        Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation("RemovalSubject", fields: [userId], references: [id], onDelete: Cascade)
+  reason      RemovalReason
+  details     String?
+  status      RemovalStatus @default(PENDING)
+  requesterId String
+  requester   User          @relation("RemovalRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  decidedById String?
+  decidedBy   User?         @relation("RemovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([status])
+  @@index([clubId, status])
+}
+
+model MeetingSeries {
+  id        String    @id @default(cuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name      String
+  weekday   Int?
+  time      String?
+  place     String?
+  createdAt DateTime  @default(now())
+  meetings  Meeting[]
+}
+
+model Meeting {
+  id          String         @id @default(cuid())
+  clubId      String
+  club        Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  seriesId    String?
+  series      MeetingSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  title       String
+  meetingDate DateTime       @db.Date
+  startTime   String
+  endTime     String
+  place       String
+  status      MeetingStatus  @default(DRAFT)
+  summary     String?
+  createdById String?
+  createdBy   User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  finalizedAt DateTime?
+  completedAt DateTime?
+  cancelledAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  agenda     AgendaItem[]
+  rsvps      Rsvp[]
+  attendance Attendance[]
+  projects   MemberProject[]
+
+  @@index([clubId, meetingDate])
+  @@index([clubId, status])
+}
+
+model AgendaItem {
+  id           String     @id @default(cuid())
+  meetingId    String
+  meeting      Meeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  sortOrder    Int
+  role         AgendaRole
+  title        String
+  assigneeId   String?
+  assignee     User?      @relation("AgendaAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  targetUserId String?
+  targetUser   User?      @relation("EvalTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  projectId    String?
+  project      Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  durationMin  Int?
+  notes        String?
+
+  @@index([meetingId, sortOrder])
+}
+
+model Rsvp {
+  id        String     @id @default(cuid())
+  meetingId String
+  meeting   Meeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    RsvpStatus
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@unique([meetingId, userId])
+}
+
+model Attendance {
+  id         String   @id @default(cuid())
+  meetingId  String
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation("Attendee", fields: [userId], references: [id], onDelete: Cascade)
+  present    Boolean  @default(true)
+  markedById String?
+  markedBy   User?    @relation("MarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@unique([meetingId, userId])
+}
+
+model Level {
+  id       String    @id @default(cuid())
+  number   Int       @unique
+  name     String
+  projects Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  levelId     String
+  level       Level    @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  number      Int
+  title       String
+  description String?
+  materials   ProjectMaterial[]
+  memberProjects MemberProject[]
+  agendaItems AgendaItem[]
+
+  @@unique([levelId, number])
+}
+
+model ProjectMaterial {
+  id        String       @id @default(cuid())
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  kind      MaterialKind
+  fileKey   String
+  fileName  String
+  mimeType  String
+  createdAt DateTime     @default(now())
+}
+
+model MemberProject {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation("ProjectOwner", fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  selectedAt  DateTime  @default(now())
+  score       Int?
+  feedback    String?
+  approved    Boolean   @default(false)
+  evaluatorId String?
+  evaluator   User?     @relation("Evaluator", fields: [evaluatorId], references: [id], onDelete: SetNull)
+  meetingId   String?
+  meeting     Meeting?  @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  approvedAt  DateTime?
+  certificate Certificate?
+
+  @@unique([userId, projectId])
+}
+
+model Certificate {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  memberProjectId String        @unique
+  memberProject   MemberProject @relation(fields: [memberProjectId], references: [id], onDelete: Cascade)
+  issuedAt        DateTime      @default(now())
+  title           String
+}
+
+model DuesInvoice {
+  id                String         @id @default(cuid())
+  userId            String
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clubId            String
+  club              Club           @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  amount            Int
+  currency          String
+  status            InvoiceStatus  @default(UNPAID)
+  method            PaymentMethod?
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  manualReference   String?
+  paidAt            DateTime?
+  applicationId     String?
+  createdAt         DateTime       @default(now())
+
+  @@index([userId])
+  @@index([clubId, status])
+  @@index([razorpayOrderId])
+}
+
+model Event {
+  id            String              @id @default(cuid())
+  clubId        String?
+  club          Club?               @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  startsAt      DateTime
+  endsAt        DateTime?
+  place         String?
+  status        EventStatus         @default(DRAFT)
+  createdAt     DateTime            @default(now())
+  registrations EventRegistration[]
+}
+
+model EventRegistration {
+  id        String   @id @default(cuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model Announcement {
+  id        String            @id @default(cuid())
+  clubId    String?
+  club      Club?             @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  scope     AnnouncementScope
+  createdAt DateTime          @default(now())
+
+  @@index([scope, createdAt])
+  @@index([clubId, createdAt])
+}
+
+model Conversation {
+  id           String                    @id @default(cuid())
+  clubId       String?
+  club         Club?                     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  subject      String
+  createdAt    DateTime                  @default(now())
+  messages     Message[]
+  participants ConversationParticipant[]
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
+
+model OrgSettings {
+  id               String  @id @default("org")
+  name             String  @default("Club Portal")
+  logoKey          String?
+  primaryColor     String  @default("#1e3a5f")
+  defaultFeeAmount Int     @default(150000)
+  defaultCurrency  String  @default("INR")
+  supportEmail     String?
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  snapshot   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
