@@ -31,7 +31,8 @@ usersRouter.get(
     requireSuperAdmin(req);
     const q = String(req.query.q || "").trim();
     const page = Math.max(1, Number(req.query.page) || 1);
-    const pageSize = 25;
+    const requested = Number(req.query.limit ?? req.query.pageSize ?? 25);
+    const pageSize = Number.isFinite(requested) && requested > 0 ? Math.min(100, Math.floor(requested)) : 25;
     const where = q
       ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { email: { contains: q, mode: "insensitive" as const } }] }
       : {};
@@ -184,6 +185,60 @@ usersRouter.delete(
     });
     await prisma.user.delete({ where: { id: user.id } });
     res.json({ ok: true });
+  }),
+);
+
+usersRouter.post(
+  "/:id/freeze",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    if (actor.id === req.params.id) throw new HttpError(400, "You cannot freeze your own account");
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw new HttpError(404, "User not found");
+    if (user.role === "SUPER_ADMIN") throw new HttpError(400, "Super Admin accounts cannot be frozen");
+    if (user.status === "SUSPENDED") throw new HttpError(400, "Account is already suspended");
+    const updated = await prisma.user.update({ where: { id: user.id }, data: { status: "SUSPENDED" } });
+    await writeAudit({
+      actorId: actor.id,
+      action: "user.freeze",
+      entityType: "User",
+      entityId: user.id,
+      snapshot: { email: user.email, from: user.status },
+    });
+    res.json({ user: userCore(updated) });
+  }),
+);
+
+usersRouter.post(
+  "/:id/reinstate",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    const body = z.object({ clubId: z.string().min(1).optional() }).parse(req.body || {});
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, include: { memberships: true } });
+    if (!user) throw new HttpError(404, "User not found");
+    const former = user.memberships.filter((row) => row.status !== "ACTIVE" && (!body.clubId || row.clubId === body.clubId));
+    const unsuspend = user.status === "SUSPENDED";
+    if (!unsuspend && former.length === 0) {
+      throw new HttpError(400, "This member is already active");
+    }
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = unsuspend ? await tx.user.update({ where: { id: user.id }, data: { status: "ACTIVE" } }) : user;
+      if (former.length) {
+        await tx.membership.updateMany({
+          where: { id: { in: former.map((row) => row.id) } },
+          data: { status: "ACTIVE", endedAt: null },
+        });
+      }
+      return next;
+    });
+    await writeAudit({
+      actorId: actor.id,
+      action: "user.reinstate",
+      entityType: "User",
+      entityId: user.id,
+      snapshot: { unsuspend, memberships: former.map((row) => row.clubId) },
+    });
+    res.json({ user: userCore(updated), membershipsRestored: former.length });
   }),
 );
 

@@ -99,6 +99,8 @@ enum MaterialKind {
   GUIDE
   HANDBOOK
   OTHER
+  LINK
+  YOUTUBE
 }
 
 enum InvoiceStatus {
@@ -480,9 +482,10 @@ model ProjectMaterial {
   project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title     String
   kind      MaterialKind
-  fileKey   String
-  fileName  String
-  mimeType  String
+  fileKey   String?
+  fileName  String?
+  mimeType  String?
+  url       String?
   createdAt DateTime     @default(now())
 }
 

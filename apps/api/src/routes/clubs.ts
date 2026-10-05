@@ -392,9 +392,8 @@ clubsRouter.post(
 clubsRouter.post(
   "/:id/members/:userId/reinstate",
   asyncHandler(async (req, res) => {
-    const user = requireUser(req);
     const club = await clubOr404(req.params.id);
-    await assertClubAdmin(user.id, club.id);
+    const actor = await assertHqOrClubAdmin(req, club.id);
     const member = await prisma.user.findUnique({ where: { id: req.params.userId } });
     if (!member) throw new HttpError(404, "Member not found");
     const membership = await prisma.membership.findUnique({
@@ -412,7 +411,7 @@ clubsRouter.post(
         kind: "REINSTATE",
         token,
         userId: member.id,
-        createdById: user.id,
+        createdById: actor.id,
         expiresAt: addDays(new Date(), 14),
         formJson: {
           name: member.name,
@@ -429,6 +428,13 @@ clubsRouter.post(
     });
     const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/apply/${token}`;
     await sendApplicationLink(member.email, club.name, url, "REINSTATE");
+    await writeAudit({
+      actorId: actor.id,
+      action: "membership.reinstate_link",
+      entityType: "MembershipApplication",
+      entityId: application.id,
+      snapshot: { userId: member.id, clubId: club.id },
+    });
     res.status(201).json({ applicationId: application.id, url });
   }),
 );

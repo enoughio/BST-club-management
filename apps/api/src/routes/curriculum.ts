@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { requireSuperAdmin, requireUser } from "../lib/access";
+import { writeAudit } from "../lib/audit";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
 import { prisma } from "../lib/prisma";
@@ -94,7 +95,7 @@ curriculumRouter.delete(
   asyncHandler(async (req, res) => {
     requireSuperAdmin(req);
     const materials = await prisma.projectMaterial.findMany({ where: { projectId: req.params.id } });
-    await Promise.all(materials.map((material) => deleteObject(material.fileKey)));
+    await Promise.all(materials.filter((material) => material.fileKey).map((material) => deleteObject(material.fileKey!)));
     await prisma.project.delete({ where: { id: req.params.id } });
     res.json({ ok: true });
   }),
@@ -126,13 +127,45 @@ curriculumRouter.post(
   }),
 );
 
+curriculumRouter.post(
+  "/projects/:id/links",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    const project = await prisma.project.findUnique({ where: { id: req.params.id } });
+    if (!project) throw new HttpError(404, "Project not found");
+    const body = z
+      .object({
+        title: z.string().min(2).max(160),
+        url: z.string().url().max(500),
+        kind: z.enum(["LINK", "YOUTUBE"]),
+      })
+      .parse(req.body);
+    if (body.kind === "YOUTUBE") {
+      const host = new URL(body.url).hostname.replace(/^www\./, "");
+      const allowed = host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be" || host === "youtube-nocookie.com";
+      if (!allowed) throw new HttpError(400, "YouTube links must use youtube.com or youtu.be");
+    }
+    const material = await prisma.projectMaterial.create({
+      data: { projectId: project.id, title: body.title, kind: body.kind, url: body.url },
+    });
+    await writeAudit({
+      actorId: actor.id,
+      action: "curriculum.link",
+      entityType: "ProjectMaterial",
+      entityId: material.id,
+      snapshot: { projectId: project.id, kind: body.kind, url: body.url },
+    });
+    res.status(201).json({ material });
+  }),
+);
+
 curriculumRouter.delete(
   "/materials/:id",
   asyncHandler(async (req, res) => {
     requireSuperAdmin(req);
     const material = await prisma.projectMaterial.findUnique({ where: { id: req.params.id } });
     if (!material) throw new HttpError(404, "File not found");
-    await deleteObject(material.fileKey);
+    if (material.fileKey) await deleteObject(material.fileKey);
     await prisma.projectMaterial.delete({ where: { id: material.id } });
     res.json({ ok: true });
   }),
@@ -144,10 +177,12 @@ curriculumRouter.get(
     requireUser(req);
     const material = await prisma.projectMaterial.findUnique({ where: { id: req.params.id } });
     if (!material) throw new HttpError(404, "File not found");
+    if (!material.fileKey) throw new HttpError(400, "This material is a link");
     const object = await getObject(material.fileKey);
     if (!object) throw new HttpError(404, "File is missing from storage");
+    const fileName = material.fileName || "download";
     res.setHeader("Content-Type", material.mimeType || object.contentType);
-    res.setHeader("Content-Disposition", `attachment; filename="${material.fileName.replace(/"/g, "")}"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName.replace(/"/g, "")}"`);
     res.send(object.body);
   }),
 );
@@ -166,9 +201,32 @@ progressRouter.get(
       prisma.memberProject.findMany({ where: { userId: user.id }, include: { project: true, evaluator: { select: { id: true, name: true } } } }),
       prisma.certificate.findMany({ where: { userId: user.id }, orderBy: { issuedAt: "desc" } }),
     ]);
-    res.json({ levels, progress, certificates });
+    const approved = new Set(progress.filter((row) => row.approved).map((row) => row.projectId));
+    let open = true;
+    const withAccess = levels.map((level) => {
+      const unlocked = open;
+      if (level.projects.some((project) => !approved.has(project.id))) open = false;
+      return { ...level, unlocked };
+    });
+    res.json({ levels: withAccess, progress, certificates });
   }),
 );
+
+async function assertLevelUnlocked(userId: string, levelId: string) {
+  const levels = await prisma.level.findMany({
+    orderBy: { number: "asc" },
+    include: { projects: { select: { id: true } } },
+  });
+  const index = levels.findIndex((level) => level.id === levelId);
+  if (index < 0) throw new HttpError(404, "Level not found");
+  const approved = await prisma.memberProject.findMany({
+    where: { userId, approved: true },
+    select: { projectId: true },
+  });
+  const approvedIds = new Set(approved.map((row) => row.projectId));
+  const blocked = levels.slice(0, index).some((level) => level.projects.some((project) => !approvedIds.has(project.id)));
+  if (blocked) throw new HttpError(400, "Complete every project in the current level before starting the next one");
+}
 
 progressRouter.post(
   "/projects/:projectId/select",
@@ -176,6 +234,10 @@ progressRouter.post(
     const user = requireUser(req);
     const project = await prisma.project.findUnique({ where: { id: req.params.projectId } });
     if (!project) throw new HttpError(404, "Project not found");
+    const existing = await prisma.memberProject.findUnique({
+      where: { userId_projectId: { userId: user.id, projectId: project.id } },
+    });
+    if (!existing) await assertLevelUnlocked(user.id, project.levelId);
     const row = await prisma.memberProject.upsert({
       where: { userId_projectId: { userId: user.id, projectId: project.id } },
       create: { userId: user.id, projectId: project.id },

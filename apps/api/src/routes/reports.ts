@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireSuperAdmin } from "../lib/access";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
-import { clubHealth, growthReport, overviewReport, pdfBuffer, workbookBuffer } from "../lib/reports";
+import { clubHealth, growthReport, overviewPdfLines, overviewReport, overviewWorkbook, pdfBuffer, workbookBuffer } from "../lib/reports";
 import type { Response } from "express";
 
 export const reportsRouter = Router();
@@ -43,13 +43,7 @@ reportsRouter.get(
   "/overview.pdf",
   asyncHandler(async (_req, res) => {
     const report = await overviewReport();
-    const buffer = await pdfBuffer("Organization overview", [
-      `Clubs: ${report.clubs}`,
-      `Active memberships: ${report.activeMemberships}`,
-      `Completed meetings: ${report.completedMeetings}`,
-      `Paid invoices: ${report.paidInvoices}`,
-      `Dues collected (minor units): ${report.duesCollectedMinor}`,
-    ]);
+    const buffer = await pdfBuffer("Organization overview", overviewPdfLines(report));
     sendPdf(res, "overview.pdf", buffer);
   }),
 );
@@ -58,20 +52,7 @@ reportsRouter.get(
   "/overview.xlsx",
   asyncHandler(async (_req, res) => {
     const report = await overviewReport();
-    const buffer = await workbookBuffer(
-      "Overview",
-      [
-        { header: "Metric", key: "metric" },
-        { header: "Value", key: "value" },
-      ],
-      [
-        { metric: "Clubs", value: report.clubs },
-        { metric: "Active memberships", value: report.activeMemberships },
-        { metric: "Completed meetings", value: report.completedMeetings },
-        { metric: "Paid invoices", value: report.paidInvoices },
-        { metric: "Dues collected minor", value: report.duesCollectedMinor },
-      ],
-    );
+    const buffer = await overviewWorkbook(report);
     sendXlsx(res, "overview.xlsx", buffer);
   }),
 );

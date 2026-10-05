@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { assertClubAdmin, requireSuperAdmin, requireUser } from "../lib/access";
+import { writeAudit } from "../lib/audit";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
 import { sendAnnouncementMail } from "../lib/mailer";
@@ -16,9 +17,12 @@ commsRouter.get(
     const memberships = await prisma.membership.findMany({ where: { userId: user.id, status: "ACTIVE" }, select: { clubId: true } });
     const clubIds = memberships.map((row) => row.clubId);
     const announcements = await prisma.announcement.findMany({
-      where: {
-        OR: [{ scope: "GLOBAL" }, { clubId: { in: clubIds } }],
-      },
+      where:
+        user.role === "SUPER_ADMIN"
+          ? {}
+          : {
+              OR: [{ scope: "GLOBAL" }, { clubId: { in: clubIds } }],
+            },
       include: { author: { select: { id: true, name: true } }, club: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -31,13 +35,43 @@ commsRouter.post(
   "/announcements",
   asyncHandler(async (req, res) => {
     const actor = requireSuperAdmin(req);
-    const body = z.object({ title: z.string().min(2).max(160), body: z.string().min(2).max(5000) }).parse(req.body);
+    const body = z
+      .object({
+        title: z.string().min(2).max(160),
+        body: z.string().min(2).max(5000),
+        scope: z.enum(["GLOBAL", "CLUB"]).optional(),
+        clubId: z.string().min(1).optional(),
+      })
+      .parse(req.body);
+    const scope = body.scope || "GLOBAL";
+    if (scope === "CLUB" && !body.clubId) throw new HttpError(400, "Choose a club");
+    if (scope === "CLUB" && body.clubId) {
+      const club = await prisma.club.findUnique({ where: { id: body.clubId } });
+      if (!club) throw new HttpError(404, "Club not found");
+    }
     const announcement = await prisma.announcement.create({
-      data: { title: body.title, body: body.body, scope: "GLOBAL", authorId: actor.id },
+      data: { title: body.title, body: body.body, scope, clubId: scope === "CLUB" ? body.clubId : null, authorId: actor.id },
+      include: { club: { select: { id: true, name: true } } },
     });
-    const users = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, email: true } });
-    await notifyUsers(users.map((row) => row.id), body.title, body.body.slice(0, 180), "/hq/announcements");
-    await Promise.all(users.map((row) => sendAnnouncementMail(row.email, body.title, body.body).catch((error) => console.error(error))));
+    if (scope === "CLUB" && body.clubId) {
+      const members = await prisma.membership.findMany({
+        where: { clubId: body.clubId, status: "ACTIVE" },
+        include: { user: { select: { id: true, email: true } } },
+      });
+      await notifyUsers(members.map((row) => row.user.id), body.title, body.body.slice(0, 180), `/club/${body.clubId}/announcements`);
+      await Promise.all(members.map((row) => sendAnnouncementMail(row.user.email, body.title, body.body).catch((error) => console.error(error))));
+    } else {
+      const users = await prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, email: true } });
+      await notifyUsers(users.map((row) => row.id), body.title, body.body.slice(0, 180), "/hq/announcements");
+      await Promise.all(users.map((row) => sendAnnouncementMail(row.email, body.title, body.body).catch((error) => console.error(error))));
+    }
+    await writeAudit({
+      actorId: actor.id,
+      action: "announcement.create",
+      entityType: "Announcement",
+      entityId: announcement.id,
+      snapshot: { scope, clubId: announcement.clubId },
+    });
     res.status(201).json({ announcement });
   }),
 );

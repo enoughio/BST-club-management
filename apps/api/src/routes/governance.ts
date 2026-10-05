@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { assertActiveMember, assertClubAdmin, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
+import { assertActiveMember, assertClubAdmin, assertHqOrClubAdmin, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
@@ -95,8 +95,7 @@ governanceRouter.post(
   "/clubs/:id/removals",
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
-    const actor = requireUser(req);
-    await assertClubAdmin(actor.id, club.id);
+    const actor = await assertHqOrClubAdmin(req, club.id);
     const body = z
       .object({
         userId: z.string(),
@@ -112,6 +111,13 @@ governanceRouter.post(
     const request = await prisma.removalRequest.create({
       data: { clubId: club.id, userId: body.userId, reason: body.reason, details: body.details || null, requesterId: actor.id },
       include: { user: { select: { name: true } } },
+    });
+    await writeAudit({
+      actorId: actor.id,
+      action: "removal.request",
+      entityType: "RemovalRequest",
+      entityId: request.id,
+      snapshot: { userId: body.userId, clubId: club.id, reason: body.reason },
     });
     const supers = await prisma.user.findMany({ where: { role: "SUPER_ADMIN", status: "ACTIVE" } });
     await notifyUsers(supers.map((row) => row.id), "Removal requested", `${request.user.name} — ${club.name}`, "/hq/removals");

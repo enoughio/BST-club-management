@@ -2,66 +2,83 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { MemberActions, type HqMember } from "@/components/member-actions";
 import { PageIntro } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ApiError, api } from "@/lib/api";
+import { api } from "@/lib/api";
 import { titleCase } from "@/lib/format";
 
-type Row = { id: string; name: string; email: string; role: string; status: string; memberships: { clubName: string; status: string }[] };
+const LIMIT = 25;
 
 export default function HqMembersPage() {
   const [q, setQ] = useState("");
-  const [users, setUsers] = useState<Row[]>([]);
+  const [applied, setApplied] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(LIMIT);
+  const [users, setUsers] = useState<HqMember[]>([]);
 
-  function load(query = q) {
-    api<{ users: Row[] }>(`/users?q=${encodeURIComponent(query)}`).then((data) => setUsers(data.users)).catch(() => undefined);
+  function load() {
+    api<{ users: HqMember[]; total: number; page: number; pageSize: number }>(`/users?q=${encodeURIComponent(applied)}&page=${page}&limit=${LIMIT}`)
+      .then((data) => {
+        setUsers(data.users);
+        setTotal(data.total);
+        setPageSize(data.pageSize || LIMIT);
+      })
+      .catch(() => undefined);
   }
-  useEffect(() => { load(""); }, []);
+
+  useEffect(load, [applied, page]);
+
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div>
-      <PageIntro title="Members" lede="Everyone in the organization." />
+      <PageIntro title="Members" lede="Everyone in the organization. Actions ask you to confirm before anything changes." />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <Input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search name or email" />
-        <Button variant="outline" onClick={() => load()}>Search</Button>
+        <Button variant="outline" onClick={() => { setPage(1); setApplied(q); }}>Search</Button>
         <Button asChild><Link href="/hq/members/new">New member</Link></Button>
       </div>
+      <p className="mb-3 text-sm text-muted-foreground">{total} members</p>
       <div className="flex flex-col gap-3 md:hidden">
-        {users.map((user) => <MemberCard key={user.id} user={user} onDelete={() => load()} />)}
+        {users.map((user) => <MemberCard key={user.id} user={user} onChanged={load} />)}
       </div>
-      <div className="hidden overflow-hidden rounded-xl border md:block">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-muted"><tr><th className="p-3">Name</th><th>Email</th><th>Status</th><th></th></tr></thead>
+      <div className="hidden overflow-x-auto rounded-xl border md:block">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="bg-muted"><tr><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Clubs</th><th className="p-3"></th></tr></thead>
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-t">
                 <td className="p-3"><Link href={`/members/${user.id}`}>{user.name}</Link></td>
-                <td>{user.email}</td>
-                <td>{titleCase(user.status)}</td>
-                <td>{user.role !== "SUPER_ADMIN" && <Button variant="destructive" size="sm" onClick={() => remove(user.id, () => load())}>Delete</Button>}</td>
+                <td className="p-3">{user.email}</td>
+                <td className="p-3">{titleCase(user.status)}</td>
+                <td className="p-3">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</td>
+                <td className="p-3"><MemberActions user={user} onChanged={load} /></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {users.length === 0 && <p className="mt-4 text-sm text-muted-foreground">No members on this page.</p>}
+      <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <Button variant="outline" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button>
+        <p className="text-center text-sm">Page {page} of {pages}</p>
+        <Button variant="outline" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>Next</Button>
+      </div>
     </div>
   );
 }
 
-function MemberCard({ user, onDelete }: { user: Row; onDelete: () => void }) {
+function MemberCard({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
   return (
     <Card className="p-4">
       <Link href={`/members/${user.id}`} className="font-medium">{user.name}</Link>
       <p className="text-sm text-muted-foreground">{user.email}</p>
-      <p className="text-sm">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</p>
-      {user.role !== "SUPER_ADMIN" && <Button className="mt-3" variant="destructive" onClick={() => remove(user.id, onDelete)}>Delete account</Button>}
+      <p className="text-sm">{titleCase(user.status)} · {user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</p>
+      <div className="mt-3"><MemberActions user={user} onChanged={onChanged} /></div>
     </Card>
   );
-}
-
-function remove(id: string, done: () => void) {
-  api(`/users/${id}`, { method: "DELETE" }).then(() => { toast.success("Account deleted"); done(); }).catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not delete"));
 }
