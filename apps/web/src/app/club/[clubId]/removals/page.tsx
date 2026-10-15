@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Field, PageIntro } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select, Textarea } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
 import { titleCase } from "@/lib/format";
@@ -20,6 +21,7 @@ export default function ClubRemovalsPage() {
   const [reason, setReason] = useState("RESIGNATION");
   const [details, setDetails] = useState("");
   const [rows, setRows] = useState<Removal[]>([]);
+  const [confirm, setConfirm] = useState(false);
 
   function load() {
     api<{ members: MemberRow[] }>(`/clubs/${clubId}/members`).then((data) => setMembers(data.members.filter((row) => row.status === "ACTIVE"))).catch(() => undefined);
@@ -30,12 +32,7 @@ export default function ClubRemovalsPage() {
   return (
     <div>
       <PageIntro title="Removals" lede="A request ends one membership after Headquarters approves it." />
-      <form className="mb-6 flex flex-col gap-3" onSubmit={(event) => {
-        event.preventDefault();
-        api(`/clubs/${clubId}/removals`, { method: "POST", body: JSON.stringify({ userId, reason, details }) })
-          .then(() => { toast.success("Request sent"); load(); })
-          .catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not request removal"));
-      }}>
+      <form className="mb-6 flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); setConfirm(true); }}>
         <Field label="Member">
           <Select value={userId} onChange={(event) => setUserId(event.target.value)}>
             <option value="">Choose</option>
@@ -51,6 +48,11 @@ export default function ClubRemovalsPage() {
         </Field>
         <Field label="Details"><Textarea value={details} onChange={(event) => setDetails(event.target.value)} /></Field>
         <Button type="submit">Submit request</Button>
+        <ConfirmDialog open={confirm} onOpenChange={setConfirm} title="Submit this removal request?" description="Headquarters must approve it before the membership ends." confirmLabel="Submit" onConfirm={() => {
+          api(`/clubs/${clubId}/removals`, { method: "POST", body: JSON.stringify({ userId, reason, details }) })
+            .then(() => { toast.success("Request sent"); setConfirm(false); load(); })
+            .catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not request removal"));
+        }} />
       </form>
       <div className="flex flex-col gap-3">
         {rows.map((row) => <Card key={row.id} className="p-4"><p className="font-medium">{row.user.name}</p><p className="text-sm">{titleCase(row.reason)} · {titleCase(row.status)}</p><p className="text-sm">{row.details}</p></Card>)}

@@ -108,8 +108,9 @@ commsRouter.post(
       body.body.slice(0, 180),
       `/club/${req.params.id}/announcements`,
     );
-    await Promise.all(members.map((row) => sendAnnouncementMail(row.user.email, body.title, body.body).catch((error) => console.error(error))));
-    res.status(201).json({ announcement });
+    const results = await Promise.all(members.map((row) => sendAnnouncementMail(row.user.email, body.title, body.body).catch((error) => { console.error(error); return false; })));
+    const saved = await prisma.announcement.update({ where: { id: announcement.id }, data: { recipientCount: results.filter(Boolean).length } });
+    res.status(201).json({ announcement: saved, attempted: members.length });
   }),
 );
 

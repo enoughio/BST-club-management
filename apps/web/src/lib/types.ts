@@ -39,7 +39,9 @@ export type Club = {
   currency: string;
   electionIntervalMonths: number;
   nextElectionAt: string;
-  currentAdmin?: { id: string; name: string; email: string } | null;
+  currentAdmin?: { id: string; name: string; email: string; phone?: string | null } | null;
+  /** Present only on the headquarters club list. */
+  stats?: { totalMembers: number; activeMembers: number; lastMeetingAt: string | null; unpaidCount: number; unpaidMinor: number };
 };
 
 export type MemberRow = {
@@ -78,7 +80,7 @@ export type Meeting = {
   club?: { id: string; name: string };
   agenda?: AgendaItem[];
   rsvps?: { id: string; status: string; userId: string; user?: { id: string; name: string } }[];
-  attendance?: { id: string; userId: string; present: boolean; user?: { id: string; name: string; email?: string } }[];
+  attendance?: { id?: string; userId: string; present: boolean; late?: boolean; user?: { id: string; name: string; email?: string } }[];
 };
 
 export const TITLES = [

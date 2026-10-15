@@ -33,7 +33,7 @@ async function main() {
   await prisma.orgSettings.create({
     data: {
       id: "org",
-      name: "Harbour & District Clubs",
+      name: "Harbour Clubs Headquarters",
       primaryColor: "#1e3a5f",
       defaultFeeAmount: 150000,
       defaultCurrency: "INR",

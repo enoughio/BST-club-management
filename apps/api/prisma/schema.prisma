@@ -179,6 +179,7 @@ model User {
   refreshTokens       RefreshToken[]
   authTokens          AuthToken[]
   meetingsCreated     Meeting[]
+  clubNotes           ClubNote[]
 }
 
 model RefreshToken {
@@ -230,6 +231,21 @@ model Club {
   conversations Conversation[]
   invoices      DuesInvoice[]
   events        Event[]
+  notes         ClubNote[]
+}
+
+/// Internal headquarters note about a club. Never shown to club members or club admins.
+model ClubNote {
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  body      String
+  flag      String?
+  createdAt DateTime @default(now())
+
+  @@index([clubId, createdAt])
 }
 
 model MembershipApplication {
@@ -448,6 +464,7 @@ model Attendance {
   userId     String
   user       User     @relation("Attendee", fields: [userId], references: [id], onDelete: Cascade)
   present    Boolean  @default(true)
+  late       Boolean  @default(false)
   markedById String?
   markedBy   User?    @relation("MarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
@@ -574,8 +591,9 @@ model Announcement {
   author    User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   title     String
   body      String
-  scope     AnnouncementScope
-  createdAt DateTime          @default(now())
+  scope          AnnouncementScope
+  recipientCount Int               @default(0)
+  createdAt      DateTime          @default(now())
 
   @@index([scope, createdAt])
   @@index([clubId, createdAt])

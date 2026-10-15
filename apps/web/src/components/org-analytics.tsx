@@ -72,9 +72,24 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
     duesPaid: Math.round((row.duesPaidRatio || 0) * 100),
   }));
 
+  const summary = [
+    growth.length ? `${growth.reduce((sum, row) => sum + row.joined, 0)} new memberships in view` : "No membership growth yet",
+    clubs.length ? clubs.map((row) => `${row.count} ${row.label.toLowerCase()}`).join(" · ") : "No clubs yet",
+    meetings.length ? `${meetings.reduce((sum, row) => sum + row.meetings, 0)} completed meetings` : "No completed meetings yet",
+    retention ? `${percent(retention.rate)} of memberships still active` : "Retention not available",
+    dues ? `${percent(dues.paidRatio)} of invoices paid` : "No dues recorded",
+  ];
+
   return (
-    <div className="mt-6 grid gap-4 lg:grid-cols-2">
-      <ChartPanel title="Member growth" caption="New memberships by month." empty={growth.length === 0}>
+    <>
+    <ul className="mt-6 flex flex-col gap-2 md:hidden">
+      {summary.map((line) => <li key={line} className="rounded-lg border bg-card px-3 py-2 text-sm">{line}</li>)}
+      {showComparison && comparisonChart.map((row) => (
+        <li key={row.name} className="rounded-lg border bg-card px-3 py-2 text-sm">{row.name}: {row.members} members · {row.attendance}% attendance · {row.duesPaid}% dues paid</li>
+      ))}
+    </ul>
+    <div className="mt-6 hidden gap-4 md:grid lg:grid-cols-2">
+      <ChartPanel title="New Members by Month" caption="Memberships that started in each period of the selected range." empty={growth.length === 0}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={growth}>
             <Axis />
@@ -93,7 +108,7 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
           </PieChart>
         </ResponsiveContainer>
       </ChartPanel>
-      <ChartPanel title="Meeting activity" caption="Completed meetings by month." empty={meetings.length === 0}>
+      <ChartPanel title="Meetings Held by Month" caption="Completed meetings across all clubs in each period." empty={meetings.length === 0}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={meetings}>
             <Axis />
@@ -181,5 +196,6 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
         </div>
       )}
     </div>
+    </>
   );
 }

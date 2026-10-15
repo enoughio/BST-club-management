@@ -21,9 +21,10 @@ function fromAddress() {
 export async function sendMail(to: string, subject: string, text: string, html: string) {
   if (!configured()) {
     console.info(`[mail] skipped (Gmail not configured) to=${to} subject=${subject}\n${text}`);
-    return;
+    return false;
   }
   await transport().sendMail({ from: fromAddress(), to, subject, text, html });
+  return true;
 }
 
 function page(title: string, body: string) {
@@ -53,17 +54,46 @@ export async function sendMeetingNotice(input: {
   place: string;
   role: string | null;
   cancelled?: boolean;
+  reason?: string | null;
+  agenda?: { title: string; role: string; assignee: string | null }[];
+  url?: string;
 }) {
   const title = input.cancelled ? `Meeting cancelled — ${input.clubName}` : `Meeting agenda — ${input.clubName}`;
   const roleLine = input.role ? `Your role: ${input.role}.` : "You have no assigned role.";
+  const agendaText = (input.agenda || []).map((item, index) => `${index + 1}. ${item.title} (${item.role})${item.assignee ? ` — ${item.assignee}` : ""}`).join("\n");
   const text = input.cancelled
-    ? `The meeting on ${input.when} at ${input.place} has been cancelled.`
-    : `A meeting is set for ${input.when} at ${input.place}. ${roleLine}`;
-  await sendMail(input.to, title, text, page(title, `<p>${text}</p>`));
+    ? `The meeting on ${input.when} at ${input.place} has been cancelled.${input.reason ? ` Reason: ${input.reason}.` : ""}`
+    : `${input.clubName}\n${input.when}\n${input.place}\n${roleLine}\n\nAgenda\n${agendaText || "Agenda to follow."}\n${input.url ? `\nView the meeting: ${input.url}` : ""}`;
+  const agendaHtml = (input.agenda || [])
+    .map((item) => `<li><strong>${item.title}</strong> · ${item.role}${item.assignee ? ` · <span style="color:#1e3a5f">${item.assignee}</span>` : ""}</li>`)
+    .join("");
+  const html = page(
+    title,
+    `<p style="margin:0 0 8px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#9a3412">${input.clubName}</p>
+     <p>${input.when}<br/>${input.place}</p>
+     ${input.cancelled && input.reason ? `<p>Reason: ${input.reason}</p>` : ""}
+     ${input.cancelled ? "" : `<p>${roleLine}</p><ol>${agendaHtml}</ol>`}
+     ${input.url ? `<p><a href="${input.url}">View the meeting details on the portal</a></p>` : ""}`,
+  );
+  await sendMail(input.to, title, text, html);
+}
+
+export async function sendMemberReminder(to: string, clubName: string, message: string) {
+  const text = `${clubName}: ${message}`;
+  return sendMail(to, `Reminder — ${clubName}`, text, page(clubName, `<p>${message.replace(/\n/g, "<br/>")}</p>`));
+}
+
+export async function sendCommitteeChange(to: string, clubName: string, changes: string[]) {
+  const single = changes.length === 1;
+  const subject = single ? `Officer update — ${clubName}` : `Committee update — ${clubName}`;
+  const text = single
+    ? `${clubName} updated one officer role.\n${changes[0]}`
+    : `${clubName} updated the executive committee.\n${changes.join("\n")}`;
+  return sendMail(to, subject, text, page(subject, `<ul>${changes.map((line) => `<li>${line}</li>`).join("")}</ul>`));
 }
 
 export async function sendAnnouncementMail(to: string, title: string, body: string) {
-  await sendMail(to, title, body, page(title, `<p>${body.replace(/\n/g, "<br/>")}</p>`));
+  return sendMail(to, title, body, page(title, `<p>${body.replace(/\n/g, "<br/>")}</p>`));
 }
 
 export async function sendRemovalRequested(to: string, clubName: string, memberName: string, reason: string) {

@@ -13,7 +13,8 @@ export default function HistoryPage() {
   useEffect(() => { api<{ memberships: Row[] }>("/me/history").then((data) => setRows(data.memberships)).catch(() => undefined); }, []);
   return (
     <div>
-      <PageIntro title="Membership history" />
+      <PageIntro title="Membership history" lede="Every club you have belonged to, including ones that have ended." />
+      {rows.length === 0 && <Card className="p-4 text-sm text-muted-foreground">No club memberships yet.</Card>}
       <div className="flex flex-col gap-3">
         {rows.map((row) => (
           <Card key={row.id} className="p-4">

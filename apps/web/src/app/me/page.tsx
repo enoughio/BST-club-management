@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { PageIntro } from "@/components/shell";
@@ -7,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ApiError, api } from "@/lib/api";
+import { when } from "@/lib/format";
 
 type Progress = { projectId: string; approved: boolean; score: number | null; feedback: string | null };
 type Level = { id: string; number: number; name: string; unlocked?: boolean; projects: { id: string; title: string }[] };
@@ -18,10 +20,15 @@ function levelUnlocked(levels: Level[], progress: Progress[], index: number) {
   return levels.slice(0, index).every((level) => level.projects.every((project) => approved.has(project.id)));
 }
 
+type Upcoming = { id: string; title: string; meetingDate: string; club?: { name: string } };
+type Invoice = { status: string };
+
 export default function ProgressPage() {
   const [levels, setLevels] = useState<Level[]>([]);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [nextMeeting, setNextMeeting] = useState<Upcoming | null>(null);
+  const [unpaid, setUnpaid] = useState(0);
 
   function load() {
     api<{ levels: Level[]; progress: Progress[]; certificates: Certificate[] }>("/me/progress").then((data) => {
@@ -29,12 +36,41 @@ export default function ProgressPage() {
       setProgress(data.progress);
       setCertificates(data.certificates);
     }).catch(() => undefined);
+    api<{ upcoming: Upcoming[] }>("/me/meetings").then((data) => setNextMeeting(data.upcoming[0] || null)).catch(() => undefined);
+    api<{ invoices: Invoice[] }>("/me/dues").then((data) => setUnpaid(data.invoices.filter((row) => row.status !== "PAID" && row.status !== "WAIVED").length)).catch(() => undefined);
   }
   useEffect(load, []);
 
+  const approved = progress.filter((row) => row.approved).length;
+  const current = levels.find((level, index) => levelUnlocked(levels, progress, index) && !level.projects.every((project) => progress.some((row) => row.projectId === project.id && row.approved)));
+
   return (
     <div>
-      <PageIntro title="Education path" lede="Select a project, deliver it as a prepared speaker, and your speech evaluator approves it after the meeting." />
+      <PageIntro title="Progress" lede="Your education path, next meeting, and open dues." />
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Link href="/me/meetings" className="rounded-xl border bg-card p-4" title="The next meeting you can answer.">
+          <p className="text-sm text-muted-foreground">Next meeting</p>
+          <p className="font-medium">{nextMeeting ? nextMeeting.title : "None scheduled"}</p>
+          {nextMeeting && <p className="text-sm text-muted-foreground">{nextMeeting.club?.name} · {when(nextMeeting.meetingDate)}</p>}
+        </Link>
+        <Link href="/me/dues" className="rounded-xl border bg-card p-4" title="Invoices that are not paid or waived.">
+          <p className="text-sm text-muted-foreground">Open dues</p>
+          <p className="font-serif text-3xl">{unpaid}</p>
+        </Link>
+        <div className="rounded-xl border bg-card p-4" title="Projects an evaluator has approved.">
+          <p className="text-sm text-muted-foreground">Projects approved</p>
+          <p className="font-serif text-3xl">{approved}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4" title="The first level that still has an unfinished project.">
+          <p className="text-sm text-muted-foreground">Current level</p>
+          <p className="font-medium">{current ? `Level ${current.number}` : levels.length ? "Path complete" : "—"}</p>
+        </div>
+      </div>
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row">
+        <Button asChild><Link href="/me/meetings">Answer a meeting</Link></Button>
+        <Button variant="outline" asChild><Link href="/me/materials">Open materials</Link></Button>
+        <Button variant="outline" asChild><Link href="/me/dues">View dues</Link></Button>
+      </div>
       {certificates.length > 0 && <Card className="mb-4 p-4"><p className="font-medium">Certificates</p>{certificates.map((item) => <p key={item.id} className="text-sm">{item.title}</p>)}</Card>}
       <div className="flex flex-col gap-4">
         {levels.map((level, index) => {

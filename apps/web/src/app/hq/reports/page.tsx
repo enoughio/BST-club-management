@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DateRangePicker, defaultRange, rangeQuery, type DateRange } from "@/components/date-range";
 import { OrgAnalyticsCharts, type OrgAnalytics } from "@/components/org-analytics";
 import { PageIntro } from "@/components/shell";
 import { Button } from "@/components/ui/button";
@@ -13,15 +14,18 @@ import type { Club } from "@/lib/types";
 type Overview = OrgAnalytics & { clubs: number; activeMemberships: number; completedMeetings: number; duesCollectedMinor: number };
 
 export default function ReportsPage() {
+  const [range, setRange] = useState<DateRange>(defaultRange);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [clubId, setClubId] = useState("");
   const [health, setHealth] = useState<{ activeMembers: number; completedMeetings: number; attendanceRate: number; duesCollectedMinor: number; club: { name: string } } | null>(null);
 
   useEffect(() => {
-    api<Overview>("/reports/overview").then(setOverview).catch(() => setOverview(null));
     api<{ clubs: Club[] }>("/clubs").then((data) => { setClubs(data.clubs); setClubId(data.clubs[0]?.id || ""); }).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    api<Overview>(`/reports/overview?${rangeQuery(range)}`).then(setOverview).catch(() => setOverview(null));
+  }, [range]);
 
   useEffect(() => {
     if (!clubId) return;
@@ -30,15 +34,15 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <PageIntro title="Reports" lede="Organization-wide membership, meetings, retention, dues, and a club-by-club comparison." />
+      <PageIntro title="Reports" lede={`Organization-wide membership, meetings, dues, and a club-by-club comparison · ${range.label}`} actions={<DateRangePicker value={range} onChange={setRange} />} />
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Button variant="outline" asChild><a href={fileUrl("/api/v1/reports/overview.pdf")}>Overview PDF</a></Button>
-        <Button variant="outline" asChild><a href={fileUrl("/api/v1/reports/overview.xlsx")}>Overview Excel</a></Button>
+        <Button variant="outline" asChild><a href={fileUrl(`/api/v1/reports/overview.pdf?${rangeQuery(range)}`)}>Overview PDF</a></Button>
+        <Button variant="outline" asChild><a href={fileUrl(`/api/v1/reports/overview.xlsx?${rangeQuery(range)}`)}>Overview Excel</a></Button>
       </div>
       {overview && (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="p-4"><p className="text-sm text-muted-foreground">Clubs</p><p className="font-serif text-3xl">{overview.clubs}</p></Card>
-          <Card className="p-4"><p className="text-sm text-muted-foreground">Active memberships</p><p className="font-serif text-3xl">{overview.activeMemberships}</p></Card>
+          <Card className="p-4"><p className="text-sm text-muted-foreground">Active members</p><p className="font-serif text-3xl">{overview.activeMemberships}</p></Card>
           <Card className="p-4"><p className="text-sm text-muted-foreground">Completed meetings</p><p className="font-serif text-3xl">{overview.completedMeetings}</p></Card>
           <Card className="p-4"><p className="text-sm text-muted-foreground">Dues collected</p><p className="font-serif text-3xl">{money(overview.duesCollectedMinor)}</p></Card>
         </div>

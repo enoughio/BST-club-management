@@ -1,0 +1,2 @@
+ALTER TABLE "Attendance" ADD COLUMN "late" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Announcement" ADD COLUMN "recipientCount" INTEGER NOT NULL DEFAULT 0;

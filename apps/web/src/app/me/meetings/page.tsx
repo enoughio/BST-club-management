@@ -27,6 +27,7 @@ export default function MyMeetingsPage() {
     <div>
       <PageIntro title="Meetings" lede="Upcoming agendas you can answer, and meetings you attended." />
       <h2 className="mb-2 font-serif text-2xl">Upcoming</h2>
+      {upcoming.length === 0 && <Card className="mb-4 p-4 text-sm text-muted-foreground">No upcoming meeting needs an answer.</Card>}
       <div className="flex flex-col gap-3">
         {upcoming.map((meeting) => (
           <Card key={meeting.id} className="p-4">
@@ -42,6 +43,7 @@ export default function MyMeetingsPage() {
         ))}
       </div>
       <h2 className="mb-2 mt-6 font-serif text-2xl">Attended</h2>
+      {attended.length === 0 && <Card className="p-4 text-sm text-muted-foreground">Meetings you attend will show here, including evaluator feedback after the meeting is completed.</Card>}
       <div className="flex flex-col gap-3">
         {attended.map((meeting) => <Attended key={meeting.id} meeting={meeting} userId={user?.id || ""} />)}
       </div>

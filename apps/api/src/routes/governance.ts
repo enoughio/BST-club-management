@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { assertActiveMember, assertClubAdmin, assertHqOrClubAdmin, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
+import { assertActiveMember, assertHqOrClubAdmin, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
@@ -132,7 +132,7 @@ governanceRouter.get(
   "/clubs/:id/removals",
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
-    await assertClubAdmin(requireUser(req).id, club.id);
+    await assertHqOrClubAdmin(req, club.id);
     const removals = await prisma.removalRequest.findMany({
       where: { clubId: club.id },
       include: {

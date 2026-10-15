@@ -96,7 +96,16 @@ export const AGENDA_ROLES = [
   "SPEECH_EVALUATOR",
 ] as const;
 
+const SPECIAL_LABELS: Record<string, string> = {
+  MOC: "Master of Ceremony",
+  VP_EDUCATION: "VP Education",
+  VP_MEMBERSHIP: "VP Membership",
+  VP_PUBLIC_RELATIONS: "VP Public Relations",
+  SERGEANT_AT_ARMS: "Sergeant at Arms",
+};
+
 export function roleLabel(role: string) {
+  if (SPECIAL_LABELS[role]) return SPECIAL_LABELS[role];
   return role
     .toLowerCase()
     .split("_")

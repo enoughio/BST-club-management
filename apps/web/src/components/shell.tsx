@@ -1,18 +1,18 @@
 "use client";
 
-import { Bell, Menu } from "lucide-react";
-import Link from "next/link";
+import { Bell } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useDashboardBus } from "@/components/dashboard-bus";
+import { Sidebar, type NavItem } from "@/components/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { homeFor, type SessionUser } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
-export type NavItem = { href: string; label: string; icon?: React.ReactNode };
+export type { NavItem };
 
 export function Guard({ allow, children }: { allow: (user: SessionUser) => boolean; children: React.ReactNode }) {
   const { user, loading } = useSession();
@@ -29,25 +29,33 @@ export function Guard({ allow, children }: { allow: (user: SessionUser) => boole
   return <>{children}</>;
 }
 
+/**
+ * Three independent panels side by side on desktop, stacked on mobile.
+ * Each panel scrolls on its own; they talk only through the dashboard bus.
+ *
+ *   [ Sidebar 240px ] [ Main content, flexible ] [ Activity rail 320px, optional ]
+ */
 export function AppFrame({
   title,
   items,
   primaryCount = 4,
+  rail,
+  onAlerts,
   children,
 }: {
   title: string;
   items: NavItem[];
   primaryCount?: number;
+  rail?: React.ReactNode;
+  onAlerts?: () => void;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, refresh } = useSession();
-  const [more, setMore] = useState(false);
+  const { alertCount } = useDashboardBus();
   const [notesOpen, setNotesOpen] = useState(false);
   const [notes, setNotes] = useState<{ id: string; title: string; body: string; readAt: string | null; link: string | null }[]>([]);
-  const primary = items.slice(0, primaryCount);
-  const rest = items.slice(primaryCount);
 
   useEffect(() => {
     api<{ notifications: typeof notes }>("/notifications")
@@ -61,55 +69,35 @@ export function AppFrame({
     router.push("/login");
   }
 
-  function active(href: string) {
-    return pathname === href;
-  }
-
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-      <aside className="hidden border-r bg-card md:flex md:flex-col md:gap-1 md:p-4">
-        <Link href={items[0]?.href || "/"} className="mb-4 font-serif text-2xl text-primary">{title}</Link>
-        {items.map((item) => (
-          <Link key={item.href} href={item.href} className={cn("rounded-md px-3 py-2 text-sm", active(item.href) ? "bg-primary text-primary-foreground" : "hover:bg-muted")}>
-            {item.label}
-          </Link>
-        ))}
-        <button className="mt-auto rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => void logout()}>Sign out</button>
-      </aside>
-      <div className="pb-24 md:pb-8">
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
+    <div className="flex min-h-screen flex-col md:h-screen md:flex-row md:overflow-hidden">
+      <div className="w-full flex-none md:h-full md:w-60 md:overflow-y-auto">
+        <Sidebar title={title} items={items} primaryCount={primaryCount} onLogout={() => void logout()} />
+      </div>
+
+      <div className="flex min-w-0 flex-grow flex-col pb-24 md:h-full md:pb-0">
+        <header className="sticky top-0 z-30 flex flex-none items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur md:static">
           <div>
             <p className="font-serif text-lg leading-none">{title}</p>
             <p className="text-xs text-muted-foreground">{user?.name}</p>
           </div>
-          <Button variant="outline" size="icon" aria-label="Notifications" onClick={() => setNotesOpen(true)}>
-            <Bell className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {onAlerts && (
+              <Button variant="outline" size="icon" className="relative lg:hidden" aria-label="Activity and alerts" onClick={onAlerts}>
+                <Bell className="h-4 w-4" />
+                {alertCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />}
+              </Button>
+            )}
+            <Button variant="outline" size="icon" aria-label="Notifications" onClick={() => setNotesOpen(true)}>
+              <Bell className="h-4 w-4" />
+            </Button>
+          </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl px-4 py-5">{children}</main>
+        <main className="w-full flex-grow px-4 py-5 md:overflow-y-auto md:px-6">{children}</main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-card md:hidden" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
-        {primary.map((item) => (
-          <Link key={item.href} href={item.href} className={cn("flex min-h-14 flex-col items-center justify-center text-[11px]", active(item.href) && "text-primary")}>
-            {item.icon}
-            {item.label}
-          </Link>
-        ))}
-        <button className="flex min-h-14 flex-col items-center justify-center text-[11px]" onClick={() => setMore(true)}>
-          <Menu className="h-4 w-4" />
-          More
-        </button>
-      </nav>
-      <Sheet open={more} onOpenChange={setMore} title="More">
-        <div className="flex flex-col gap-2">
-          {rest.map((item) => (
-            <Link key={item.href} href={item.href} onClick={() => setMore(false)} className="tap flex items-center rounded-md px-3 hover:bg-muted">
-              {item.label}
-            </Link>
-          ))}
-          <Button variant="outline" onClick={() => void logout()}>Sign out</Button>
-        </div>
-      </Sheet>
+
+      {rail && <aside className="hidden w-80 flex-none border-l bg-card lg:block lg:h-full lg:overflow-y-auto">{rail}</aside>}
+
       <Sheet open={notesOpen} onOpenChange={setNotesOpen} title="Notifications">
         <div className="flex flex-col gap-3">
           {notes.length === 0 && <p className="text-sm text-muted-foreground">No notifications yet.</p>}
@@ -136,11 +124,14 @@ export function AppFrame({
   );
 }
 
-export function PageIntro({ title, lede }: { title: string; lede?: string }) {
+export function PageIntro({ title, lede, actions }: { title: string; lede?: string; actions?: React.ReactNode }) {
   return (
-    <div className="mb-5">
-      <h1 className="font-serif text-3xl tracking-tight">{title}</h1>
-      {lede && <p className="mt-1 text-muted-foreground">{lede}</p>}
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 className="font-serif text-3xl tracking-tight">{title}</h1>
+        {lede && <p className="mt-1 text-muted-foreground">{lede}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }

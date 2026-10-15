@@ -9,7 +9,6 @@ const items = [
   { href: "/hq/removals", label: "Removals" },
   { href: "/hq/curriculum", label: "Curriculum" },
   { href: "/hq/announcements", label: "Announcements" },
-  { href: "/hq/messages", label: "Messages" },
   { href: "/hq/reports", label: "Reports" },
   { href: "/hq/settings", label: "Settings" },
 ];

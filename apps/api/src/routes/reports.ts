@@ -1,13 +1,17 @@
 import { Router } from "express";
-import { requireSuperAdmin } from "../lib/access";
+import { assertClubAdmin, requireSuperAdmin, requireUser } from "../lib/access";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
-import { clubHealth, growthReport, overviewPdfLines, overviewReport, overviewWorkbook, pdfBuffer, workbookBuffer } from "../lib/reports";
+import { activityFeed, clubHealth, drilldown, growthReport, overviewPdfLines, overviewReport, overviewWorkbook, parseRange, pdfBuffer, unpaidByClub, workbookBuffer } from "../lib/reports";
 import type { Response } from "express";
 
 export const reportsRouter = Router();
 
 reportsRouter.use((req, res, next) => {
+  if (/^\/clubs\/[^/]+\/health/.test(req.path)) {
+    next();
+    return;
+  }
   try {
     requireSuperAdmin(req);
     next();
@@ -16,10 +20,40 @@ reportsRouter.use((req, res, next) => {
   }
 });
 
+async function assertHealthReader(req: Parameters<typeof requireUser>[0], clubId: string) {
+  const user = requireUser(req);
+  if (user.role === "SUPER_ADMIN") return;
+  await assertClubAdmin(user.id, clubId);
+}
+
 reportsRouter.get(
   "/overview",
+  asyncHandler(async (req, res) => {
+    res.json(await overviewReport(parseRange(req.query as Record<string, unknown>)));
+  }),
+);
+
+reportsRouter.get(
+  "/unpaid",
   asyncHandler(async (_req, res) => {
-    res.json(await overviewReport());
+    res.json({ clubs: await unpaidByClub() });
+  }),
+);
+
+reportsRouter.get(
+  "/activity",
+  asyncHandler(async (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
+    res.json({ items: await activityFeed(limit) });
+  }),
+);
+
+reportsRouter.get(
+  "/drilldown",
+  asyncHandler(async (req, res) => {
+    const kind = String(req.query.kind || "");
+    if (!["clubs", "members", "meetings", "dues"].includes(kind)) throw new HttpError(400, "kind must be clubs, members, meetings, or dues");
+    res.json({ rows: await drilldown(kind, parseRange(req.query as Record<string, unknown>)) });
   }),
 );
 
@@ -33,6 +67,7 @@ reportsRouter.get(
 reportsRouter.get(
   "/clubs/:id/health",
   asyncHandler(async (req, res) => {
+    await assertHealthReader(req, req.params.id);
     const health = await clubHealth(req.params.id);
     if (!health) throw new HttpError(404, "Club not found");
     res.json(health);
@@ -41,8 +76,8 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/overview.pdf",
-  asyncHandler(async (_req, res) => {
-    const report = await overviewReport();
+  asyncHandler(async (req, res) => {
+    const report = await overviewReport(parseRange(req.query as Record<string, unknown>));
     const buffer = await pdfBuffer("Organization overview", overviewPdfLines(report));
     sendPdf(res, "overview.pdf", buffer);
   }),
@@ -50,8 +85,8 @@ reportsRouter.get(
 
 reportsRouter.get(
   "/overview.xlsx",
-  asyncHandler(async (_req, res) => {
-    const report = await overviewReport();
+  asyncHandler(async (req, res) => {
+    const report = await overviewReport(parseRange(req.query as Record<string, unknown>));
     const buffer = await overviewWorkbook(report);
     sendXlsx(res, "overview.xlsx", buffer);
   }),
@@ -60,6 +95,7 @@ reportsRouter.get(
 reportsRouter.get(
   "/clubs/:id/health.pdf",
   asyncHandler(async (req, res) => {
+    await assertHealthReader(req, req.params.id);
     const health = await clubHealth(req.params.id);
     if (!health) throw new HttpError(404, "Club not found");
     const buffer = await pdfBuffer(`${health.club.name} health`, [
@@ -79,6 +115,7 @@ reportsRouter.get(
 reportsRouter.get(
   "/clubs/:id/health.xlsx",
   asyncHandler(async (req, res) => {
+    await assertHealthReader(req, req.params.id);
     const health = await clubHealth(req.params.id);
     if (!health) throw new HttpError(404, "Club not found");
     const buffer = await workbookBuffer(

@@ -3,16 +3,25 @@ import { parse } from "csv-parse/sync";
 import { stringify } from "csv-stringify/sync";
 import multer from "multer";
 import { z } from "zod";
-import { assertClubAdmin, assertHqOrClubAdmin, assertStaff, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
+import { assertHqOrClubAdmin, assertStaff, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
 import { addMonths, slugify } from "../lib/dates";
 import { HttpError } from "../lib/errors";
+import { createAuthToken } from "../lib/auth";
 import { asyncHandler } from "../lib/http";
+import { sendCommitteeChange, sendMemberReminder, sendPasswordReset } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
-import { TITLES } from "../lib/serialize";
+import { publicFileUrl, roleLabel, TITLES } from "../lib/serialize";
 
 export const clubsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+
+const officerUserSelect = { id: true, name: true, email: true, avatarKey: true } as const;
+
+function withAvatar<T extends { user: { avatarKey: string | null } }>(row: T) {
+  const { avatarKey, ...user } = row.user;
+  return { ...row, user: { ...user, avatarUrl: publicFileUrl(avatarKey) } };
+}
 
 clubsRouter.get(
   "/",
@@ -23,17 +32,33 @@ clubsRouter.get(
       ? { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { city: { contains: q, mode: "insensitive" as const } }] }
       : {};
     if (user.role === "SUPER_ADMIN") {
-      const clubs = await prisma.club.findMany({
-        where: search,
-        orderBy: { name: "asc" },
-        include: { admins: { where: { endedAt: null }, include: { user: { select: { id: true, name: true, email: true } } } } },
-      });
+      const [clubs, memberCounts, lastMeetings, unpaid] = await Promise.all([
+        prisma.club.findMany({
+          where: search,
+          orderBy: { name: "asc" },
+          include: { admins: { where: { endedAt: null }, include: { user: { select: { id: true, name: true, email: true, phone: true } } } } },
+        }),
+        prisma.membership.groupBy({ by: ["clubId", "status"], _count: true }),
+        prisma.meeting.groupBy({ by: ["clubId"], where: { status: "COMPLETED" }, _max: { meetingDate: true } }),
+        prisma.duesInvoice.groupBy({ by: ["clubId"], where: { status: "UNPAID" }, _count: true, _sum: { amount: true } }),
+      ]);
       res.json({
-        clubs: clubs.map((club) => ({
-          ...club,
-          currentAdmin: club.admins[0]?.user || null,
-          admins: undefined,
-        })),
+        clubs: clubs.map((club) => {
+          const counts = memberCounts.filter((row) => row.clubId === club.id);
+          const unpaidRow = unpaid.find((row) => row.clubId === club.id);
+          return {
+            ...club,
+            currentAdmin: club.admins[0]?.user || null,
+            admins: undefined,
+            stats: {
+              totalMembers: counts.reduce((sum, row) => sum + row._count, 0),
+              activeMembers: counts.find((row) => row.status === "ACTIVE")?._count || 0,
+              lastMeetingAt: lastMeetings.find((row) => row.clubId === club.id)?._max.meetingDate || null,
+              unpaidCount: unpaidRow?._count || 0,
+              unpaidMinor: unpaidRow?._sum.amount || 0,
+            },
+          };
+        }),
       });
       return;
     }
@@ -228,6 +253,103 @@ clubsRouter.post(
   }),
 );
 
+clubsRouter.post(
+  "/:id/admin/reset-password",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    const club = await clubOr404(req.params.id);
+    const admin = await prisma.clubAdmin.findFirst({ where: { clubId: club.id, endedAt: null }, include: { user: true } });
+    if (!admin) throw new HttpError(400, "This club has no Club Admin yet");
+    if (admin.user.status === "SUSPENDED") throw new HttpError(400, "The Club Admin account is frozen");
+    const token = await createAuthToken(admin.userId, "RESET", 1);
+    const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/reset-password?token=${token}`;
+    const sent = await sendPasswordReset(admin.user.email, url).then(() => true).catch(() => false);
+    await writeAudit({ actorId: actor.id, action: "club.admin_reset_password", entityType: "Club", entityId: club.id, snapshot: { userId: admin.userId } });
+    res.json({ ok: true, sent, email: admin.user.email });
+  }),
+);
+
+clubsRouter.get(
+  "/:id/roster",
+  asyncHandler(async (req, res) => {
+    const club = await clubOr404(req.params.id);
+    await assertHqOrClubAdmin(req, club.id);
+    const [members, officers, lastAttendance, latestInvoices] = await Promise.all([
+      prisma.membership.findMany({
+        where: { clubId: club.id },
+        include: { user: { select: { id: true, name: true, email: true, phone: true, status: true } } },
+        orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
+      }),
+      prisma.officerRole.findMany({ where: { clubId: club.id, endedAt: null }, select: { userId: true, title: true } }),
+      prisma.attendance.groupBy({ by: ["userId"], where: { present: true, meeting: { clubId: club.id, status: "COMPLETED" } }, _max: { createdAt: true } }),
+      prisma.duesInvoice.findMany({ where: { clubId: club.id }, orderBy: { createdAt: "desc" }, select: { userId: true, status: true, amount: true, paidAt: true } }),
+    ]);
+    const meetingsAttended = await prisma.attendance.findMany({
+      where: { present: true, meeting: { clubId: club.id, status: "COMPLETED" } },
+      select: { userId: true, meeting: { select: { meetingDate: true } } },
+    });
+    const lastMeeting = new Map<string, Date>();
+    for (const row of meetingsAttended) {
+      const current = lastMeeting.get(row.userId);
+      if (!current || row.meeting.meetingDate > current) lastMeeting.set(row.userId, row.meeting.meetingDate);
+    }
+    const latestInvoice = new Map<string, (typeof latestInvoices)[number]>();
+    for (const row of latestInvoices) if (!latestInvoice.has(row.userId)) latestInvoice.set(row.userId, row);
+    void lastAttendance;
+    res.json({
+      members: members.map((row) => ({
+        membershipId: row.id,
+        status: row.status,
+        joinedAt: row.joinedAt,
+        endedAt: row.endedAt,
+        user: row.user,
+        offices: officers.filter((officer) => officer.userId === row.userId).map((officer) => officer.title),
+        lastAttendanceAt: lastMeeting.get(row.userId) || null,
+        dues: latestInvoice.get(row.userId) ? { status: latestInvoice.get(row.userId)!.status, amount: latestInvoice.get(row.userId)!.amount, paidAt: latestInvoice.get(row.userId)!.paidAt } : null,
+      })),
+    });
+  }),
+);
+
+clubsRouter.get(
+  "/:id/notes",
+  asyncHandler(async (req, res) => {
+    requireSuperAdmin(req);
+    const club = await clubOr404(req.params.id);
+    const notes = await prisma.clubNote.findMany({
+      where: { clubId: club.id },
+      orderBy: { createdAt: "desc" },
+      include: { author: { select: { id: true, name: true } } },
+    });
+    res.json({ notes });
+  }),
+);
+
+clubsRouter.post(
+  "/:id/notes",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    const club = await clubOr404(req.params.id);
+    const body = z.object({ body: z.string().min(2).max(4000), flag: z.enum(["REVIEW", "SUPPORT", "RISK", "INFO"]).optional().nullable() }).parse(req.body);
+    const note = await prisma.clubNote.create({
+      data: { clubId: club.id, authorId: actor.id, body: body.body, flag: body.flag || null },
+      include: { author: { select: { id: true, name: true } } },
+    });
+    await writeAudit({ actorId: actor.id, action: "club.note", entityType: "Club", entityId: club.id, snapshot: { flag: note.flag } });
+    res.status(201).json({ note });
+  }),
+);
+
+clubsRouter.delete(
+  "/:id/notes/:noteId",
+  asyncHandler(async (req, res) => {
+    requireSuperAdmin(req);
+    const club = await clubOr404(req.params.id);
+    await prisma.clubNote.deleteMany({ where: { id: req.params.noteId, clubId: club.id } });
+    res.json({ ok: true });
+  }),
+);
+
 clubsRouter.get(
   "/:id/officers",
   asyncHandler(async (req, res) => {
@@ -237,18 +359,18 @@ clubsRouter.get(
     if (scope === "current") {
       const officers = await prisma.officerRole.findMany({
         where: { clubId: club.id, endedAt: null },
-        include: { user: { select: { id: true, name: true, email: true } } },
+        include: { user: { select: officerUserSelect } },
         orderBy: { title: "asc" },
       });
-      res.json({ officers });
+      res.json({ officers: officers.map(withAvatar) });
       return;
     }
     if (scope !== "past") throw new HttpError(400, "scope must be current or past");
-    const rows = await prisma.officerRole.findMany({
+    const rows = (await prisma.officerRole.findMany({
       where: { clubId: club.id, endedAt: { not: null } },
-      include: { user: { select: { id: true, name: true, email: true } }, election: true },
+      include: { user: { select: officerUserSelect }, election: true },
       orderBy: { startedAt: "desc" },
-    });
+    })).map(withAvatar);
     const groups = new Map<string, { key: string; startedAt: Date; endedAt: Date | null; electionId: string | null; officers: typeof rows }>();
     for (const row of rows) {
       const key = row.electionId || `${row.startedAt.toISOString().slice(0, 10)}:${row.endedAt?.toISOString().slice(0, 10) || ""}`;
@@ -273,6 +395,10 @@ clubsRouter.put(
         officers: z.array(z.object({ title: z.enum(TITLES), userId: z.string().nullable() })),
       })
       .parse(req.body);
+    const before = await prisma.officerRole.findMany({
+      where: { clubId: club.id, endedAt: null },
+      include: { user: { select: { id: true, name: true } } },
+    });
     const now = new Date();
     await prisma.$transaction(async (tx) => {
       for (const entry of body.officers) {
@@ -291,10 +417,25 @@ clubsRouter.put(
       }
     });
     await writeAudit({ actorId: actor.id, action: "club.officers_assign", entityType: "Club", entityId: club.id });
-    const officers = await prisma.officerRole.findMany({
+    const officers = (await prisma.officerRole.findMany({
       where: { clubId: club.id, endedAt: null },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: { user: { select: officerUserSelect } },
+    })).map(withAvatar);
+    const previous = new Map(before.map((row) => [row.title, row.user.name]));
+    const nextNames = new Map(officers.map((row) => [row.title, row.user.name]));
+    const changes = TITLES.flatMap((title) => {
+      const from = previous.get(title) || "Vacant";
+      const to = nextNames.get(title) || "Vacant";
+      if (from === to) return [];
+      return [`${roleLabel(title)}: ${from} → ${to}`];
     });
+    if (changes.length) {
+      const members = await prisma.membership.findMany({
+        where: { clubId: club.id, status: "ACTIVE" },
+        include: { user: { select: { email: true } } },
+      });
+      await Promise.all(members.map((row) => sendCommitteeChange(row.user.email, club.name, changes).catch((error) => console.error(error))));
+    }
     res.json({ officers });
   }),
 );
@@ -322,10 +463,64 @@ clubsRouter.get(
 );
 
 clubsRouter.get(
+  "/:id/members/:userId/profile",
+  asyncHandler(async (req, res) => {
+    const club = await clubOr404(req.params.id);
+    await assertStaff(req, club.id);
+    const membership = await prisma.membership.findUnique({
+      where: { userId_clubId: { userId: req.params.userId, clubId: club.id } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, occupation: true, goals: true, status: true, avatarKey: true } } },
+    });
+    if (!membership) throw new HttpError(404, "Member not found");
+    const [offices, invoices, attendance, projects] = await Promise.all([
+      prisma.officerRole.findMany({ where: { clubId: club.id, userId: membership.userId, endedAt: null }, select: { title: true } }),
+      prisma.duesInvoice.findMany({ where: { clubId: club.id, userId: membership.userId }, orderBy: { createdAt: "desc" }, take: 8 }),
+      prisma.attendance.findMany({
+        where: { userId: membership.userId, meeting: { clubId: club.id } },
+        include: { meeting: { select: { id: true, title: true, meetingDate: true } } },
+        orderBy: { meeting: { meetingDate: "desc" } },
+        take: 12,
+      }),
+      prisma.memberProject.findMany({
+        where: { userId: membership.userId },
+        include: { project: { select: { title: true, level: { select: { name: true, number: true } } } } },
+      }),
+    ]);
+    res.json({
+      member: {
+        membershipId: membership.id,
+        status: membership.status,
+        joinedAt: membership.joinedAt,
+        user: membership.user,
+        offices: offices.map((row) => row.title),
+        invoices,
+        attendance,
+        projects: projects.map((row) => ({ title: row.project.title, level: row.project.level.name, approved: row.approved })),
+      },
+    });
+  }),
+);
+
+clubsRouter.post(
+  "/:id/reminders",
+  asyncHandler(async (req, res) => {
+    const club = await clubOr404(req.params.id);
+    await assertHqOrClubAdmin(req, club.id);
+    const body = z.object({ userIds: z.array(z.string()).min(1), message: z.string().min(2).max(2000) }).parse(req.body);
+    const members = await prisma.membership.findMany({
+      where: { clubId: club.id, userId: { in: body.userIds } },
+      include: { user: { select: { email: true } } },
+    });
+    const results = await Promise.all(members.map((row) => sendMemberReminder(row.user.email, club.name, body.message).catch(() => false)));
+    res.json({ sent: results.filter(Boolean).length, attempted: members.length });
+  }),
+);
+
+clubsRouter.get(
   "/:id/members/export",
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
-    await assertClubAdmin(requireUser(req).id, club.id);
+    await assertHqOrClubAdmin(req, club.id);
     const members = await prisma.membership.findMany({
       where: { clubId: club.id },
       include: { user: true },
@@ -353,7 +548,7 @@ clubsRouter.post(
   upload.single("file"),
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
-    await assertClubAdmin(requireUser(req).id, club.id);
+    await assertHqOrClubAdmin(req, club.id);
     if (!req.file) throw new HttpError(400, "Upload a CSV file");
     const rows = parse(req.file.buffer, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, string>[];
     let created = 0;
@@ -443,7 +638,7 @@ clubsRouter.get(
   "/:id/dues",
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
-    await assertClubAdmin(requireUser(req).id, club.id);
+    await assertHqOrClubAdmin(req, club.id);
     const invoices = await prisma.duesInvoice.findMany({
       where: { clubId: club.id },
       include: { user: { select: { id: true, name: true, email: true } } },

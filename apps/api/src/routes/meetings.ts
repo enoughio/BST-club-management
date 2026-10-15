@@ -1,7 +1,7 @@
 import { AgendaRole, Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
-import { assertClubAdmin, assertClubAdminOrPresident, assertStaff, clubOr404, currentClubAdmin, currentOfficer, requireUser } from "../lib/access";
+import { assertClubAdmin, assertClubAdminOrPresident, assertHqOrClubAdmin, assertStaff, clubOr404, currentClubAdmin, currentOfficer, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
 import { meetingMoment, parseDateOnly, startOfUtcDay } from "../lib/dates";
 import { HttpError } from "../lib/errors";
@@ -77,7 +77,10 @@ meetingsRouter.get(
     const meetings = await prisma.meeting.findMany({
       where,
       orderBy: { meetingDate: "desc" },
-      include: { _count: { select: { agenda: true, rsvps: true, attendance: true } } },
+      include: {
+        agenda: { select: { id: true, role: true, title: true, assigneeId: true, durationMin: true } },
+        attendance: { select: { userId: true, present: true, late: true } },
+      },
     });
     res.json({ meetings });
   }),
@@ -179,6 +182,10 @@ meetingsRouter.post(
     const meeting = await loadMeeting(req.params.id);
     const actor = await assertClubAdminOrPresident(req, meeting.clubId);
     if (meeting.status !== "DRAFT") throw new HttpError(400, "Only a draft can be finalized");
+    const assigned = (role: AgendaRole) => meeting.agenda.some((item) => item.role === role && item.assigneeId);
+    if (!assigned("MOC") || !assigned("OPEN_MIC_COORDINATOR")) {
+      throw new HttpError(400, "Assign Master of Ceremony and Open Mic Coordinator before finalizing");
+    }
     const updated = await prisma.meeting.update({
       where: { id: meeting.id },
       data: { status: "FINALIZED", finalizedAt: new Date() },
@@ -197,12 +204,13 @@ meetingsRouter.post(
     const actor = requireUser(req);
     await assertClubAdmin(actor.id, meeting.clubId);
     if (meeting.status !== "FINALIZED") throw new HttpError(400, "Only a finalized meeting can be cancelled");
+    const body = z.object({ reason: z.string().min(3).max(500) }).parse(req.body);
     const updated = await prisma.meeting.update({
       where: { id: meeting.id },
-      data: { status: "CANCELLED", cancelledAt: new Date() },
+      data: { status: "CANCELLED", cancelledAt: new Date(), summary: meeting.summary ? `${meeting.summary}\n\nCancelled: ${body.reason}` : `Cancelled: ${body.reason}` },
       include: meetingInclude,
     });
-    await emailMeeting(updated, true);
+    await emailMeeting(updated, true, body.reason);
     await writeAudit({ actorId: actor.id, action: "meeting.cancel", entityType: "Meeting", entityId: meeting.id });
     res.json({ meeting: updated });
   }),
@@ -231,7 +239,7 @@ meetingsRouter.patch(
   "/meetings/:id/summary",
   asyncHandler(async (req, res) => {
     const meeting = await loadMeeting(req.params.id);
-    await assertClubAdmin(requireUser(req).id, meeting.clubId);
+    await assertHqOrClubAdmin(req, meeting.clubId);
     const body = z.object({ summary: z.string().max(4000) }).parse(req.body);
     const updated = await prisma.meeting.update({ where: { id: meeting.id }, data: { summary: body.summary } });
     res.json({ meeting: updated });
@@ -261,15 +269,16 @@ meetingsRouter.put(
   asyncHandler(async (req, res) => {
     const meeting = await loadMeeting(req.params.id);
     const actor = await assertStaff(req, meeting.clubId);
-    const body = z.object({ records: z.array(z.object({ userId: z.string(), present: z.boolean() })) }).parse(req.body);
+    const body = z.object({ records: z.array(z.object({ userId: z.string(), present: z.boolean(), late: z.boolean().optional() })) }).parse(req.body);
     await prisma.$transaction(
-      body.records.map((record) =>
-        prisma.attendance.upsert({
+      body.records.map((record) => {
+        const late = Boolean(record.late) && record.present;
+        return prisma.attendance.upsert({
           where: { meetingId_userId: { meetingId: meeting.id, userId: record.userId } },
-          create: { meetingId: meeting.id, userId: record.userId, present: record.present, markedById: actor.id },
-          update: { present: record.present, markedById: actor.id },
-        }),
-      ),
+          create: { meetingId: meeting.id, userId: record.userId, present: record.present || late, late, markedById: actor.id },
+          update: { present: record.present || late, late, markedById: actor.id },
+        });
+      }),
     );
     const attendance = await prisma.attendance.findMany({
       where: { meetingId: meeting.id },
@@ -423,19 +432,22 @@ async function emailMeeting(
     startTime: string;
     place: string;
     club: { name: string };
-    agenda: { role: AgendaRole; assigneeId: string | null; assignee: { name: string } | null }[];
+    agenda: { role: AgendaRole; title: string; assigneeId: string | null; assignee: { name: string } | null }[];
   },
   cancelled: boolean,
+  reason?: string,
 ) {
   const members = await prisma.membership.findMany({
     where: { clubId: meeting.clubId, status: "ACTIVE" },
     include: { user: { select: { id: true, email: true, name: true } } },
   });
   const when = `${meeting.meetingDate.toISOString().slice(0, 10)} ${meeting.startTime}`;
+  const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/me/meetings`;
+  const agenda = meeting.agenda.map((item) => ({ title: item.title, role: roleLabel(item.role), assignee: item.assignee?.name || null }));
   await notifyUsers(
     members.map((member) => member.user.id),
     cancelled ? "Meeting cancelled" : "Meeting finalized",
-    `${meeting.club.name}: ${meeting.title} on ${when}`,
+    `${meeting.club.name}: ${meeting.title} on ${when}${reason ? `. ${reason}` : ""}`,
     `/me/meetings`,
   );
   await Promise.all(
@@ -448,6 +460,9 @@ async function emailMeeting(
         place: meeting.place,
         role: assignment ? roleLabel(assignment.role) : null,
         cancelled,
+        reason,
+        agenda,
+        url,
       }).catch((error) => console.error(error));
     }),
   );
