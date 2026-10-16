@@ -96,11 +96,15 @@ enum RsvpStatus {
 }
 
 enum MaterialKind {
-  GUIDE
-  HANDBOOK
-  OTHER
-  LINK
-  YOUTUBE
+  GUIDE_FILE
+  VIDEO
+  BOOK
+  ARTICLE
+}
+
+enum CurriculumVersionStatus {
+  DRAFT
+  PUBLISHED
 }
 
 enum InvoiceStatus {
@@ -176,6 +180,7 @@ model User {
   notifications       Notification[]
   pushSubscriptions   PushSubscription[]
   auditLogs           AuditLog[]
+  curriculumVersions  CurriculumVersion[]
   refreshTokens       RefreshToken[]
   authTokens          AuthToken[]
   meetingsCreated     Meeting[]
@@ -484,9 +489,10 @@ model Project {
   levelId     String
   level       Level    @relation(fields: [levelId], references: [id], onDelete: Cascade)
   number      Int
-  title       String
-  description String?
-  materials   ProjectMaterial[]
+  title               String
+  description         String?
+  evaluationCriteria  String?
+  materials           ProjectMaterial[]
   memberProjects MemberProject[]
   agendaItems AgendaItem[]
 
@@ -503,7 +509,20 @@ model ProjectMaterial {
   fileName  String?
   mimeType  String?
   url       String?
+  position  Int          @default(0)
   createdAt DateTime     @default(now())
+}
+
+model CurriculumVersion {
+  id        String                   @id @default(cuid())
+  status    CurriculumVersionStatus
+  snapshot  Json
+  summary   String
+  authorId  String?
+  author    User?                    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime                 @default(now())
+
+  @@index([status, createdAt])
 }
 
 model MemberProject {
@@ -662,6 +681,7 @@ model OrgSettings {
   defaultFeeAmount Int     @default(150000)
   defaultCurrency  String  @default("INR")
   supportEmail     String?
+  requireGuideFile Boolean @default(true)
 }
 
 model AuditLog {

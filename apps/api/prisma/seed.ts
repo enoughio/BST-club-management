@@ -79,7 +79,7 @@ async function main() {
           data: {
             projectId: project.id,
             title: `${title} guide`,
-            kind: "GUIDE",
+            kind: "GUIDE_FILE",
             fileKey,
             fileName,
             mimeType: "text/plain",

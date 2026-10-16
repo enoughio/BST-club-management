@@ -5,7 +5,7 @@ import { AppFrame, Guard } from "@/components/shell";
 const items = [
   { href: "/me", label: "Progress" },
   { href: "/me/meetings", label: "Meetings" },
-  { href: "/me/materials", label: "Materials" },
+  { href: "/me/materials", label: "Curriculum" },
   { href: "/me/dues", label: "Dues" },
   { href: "/me/history", label: "History" },
   { href: "/me/profile", label: "Profile" },

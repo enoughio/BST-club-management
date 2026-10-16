@@ -1,5 +1,6 @@
 "use client";
 
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -68,7 +69,7 @@ export default function ProgressPage() {
       </div>
       <div className="mb-6 flex flex-col gap-2 sm:flex-row">
         <Button asChild><Link href="/me/meetings">Answer a meeting</Link></Button>
-        <Button variant="outline" asChild><Link href="/me/materials">Open materials</Link></Button>
+        <Button variant="outline" asChild><Link href="/me/materials">Open curriculum</Link></Button>
         <Button variant="outline" asChild><Link href="/me/dues">View dues</Link></Button>
       </div>
       {certificates.length > 0 && <Card className="mb-4 p-4"><p className="font-medium">Certificates</p>{certificates.map((item) => <p key={item.id} className="text-sm">{item.title}</p>)}</Card>}
@@ -79,9 +80,9 @@ export default function ProgressPage() {
             <section key={level.id}>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-serif text-2xl">Level {level.number}: {level.name}</h2>
-                {!unlocked && <Badge>Locked</Badge>}
+                {!unlocked && <Badge title={`Unlocks after Level ${levels[index - 1]?.number ?? index} completion`}><Lock className="mr-1 h-3 w-3" /> Locked</Badge>}
               </div>
-              {!unlocked && <p className="mt-1 text-sm text-muted-foreground">Complete every project in the previous level before starting this one.</p>}
+              {!unlocked && <p className="mt-1 text-sm text-muted-foreground">Unlocks after Level {levels[index - 1]?.number ?? index} completion.</p>}
               <div className="mt-2 flex flex-col gap-2">
                 {level.projects.map((project) => {
                   const row = progress.find((item) => item.projectId === project.id);

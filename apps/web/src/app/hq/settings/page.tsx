@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
 
-type Settings = { name: string; primaryColor: string; defaultFeeAmount: number; defaultCurrency: string; supportEmail: string | null };
+type Settings = { name: string; primaryColor: string; defaultFeeAmount: number; defaultCurrency: string; supportEmail: string | null; requireGuideFile?: boolean };
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -27,6 +27,10 @@ export default function SettingsPage() {
       <Field label="Default fee (rupees)"><Input value={settings.defaultFeeAmount} onChange={(event) => setSettings({ ...settings, defaultFeeAmount: Number(event.target.value) })} /></Field>
       <Field label="Currency"><Input value={settings.defaultCurrency} onChange={(event) => setSettings({ ...settings, defaultCurrency: event.target.value })} /></Field>
       <Field label="Support email"><Input value={settings.supportEmail || ""} onChange={(event) => setSettings({ ...settings, supportEmail: event.target.value })} /></Field>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-1" checked={settings.requireGuideFile !== false} onChange={(event) => setSettings({ ...settings, requireGuideFile: event.target.checked })} />
+        <span>Require a guide file on every project before the curriculum can be published.</span>
+      </label>
       <Button type="submit">Save</Button>
     </form>
   );

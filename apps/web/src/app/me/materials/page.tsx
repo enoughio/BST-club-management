@@ -1,42 +1,38 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { MemberCurriculum } from "@/components/member-curriculum";
 import { PageIntro } from "@/components/shell";
-import { Card } from "@/components/ui/card";
-import { api, fileUrl } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
+import type { CurriculumLevel } from "@/lib/curriculum";
 
-type Material = { id: string; title: string; kind: string; url: string | null };
-type Level = { id: string; name: string; number: number; projects: { id: string; title: string; materials: Material[] }[] };
-
-function MaterialLink({ material }: { material: Material }) {
-  if (material.kind === "LINK" || material.kind === "YOUTUBE") {
-    if (!material.url) return <p className="py-2 text-sm">{material.title}</p>;
-    return <a className="block min-h-11 py-2 text-primary" href={material.url} target="_blank" rel="noreferrer">{material.title}</a>;
-  }
-  return <a className="block min-h-11 py-2 text-primary" href={fileUrl(`/api/v1/curriculum/materials/${material.id}/download`)}>{material.title}</a>;
-}
+type Progress = { projectId: string; approved: boolean; score: number | null; feedback: string | null };
+type Level = CurriculumLevel & { unlocked?: boolean };
 
 export default function MaterialsPage() {
   const [levels, setLevels] = useState<Level[]>([]);
-  useEffect(() => { api<{ levels: Level[] }>("/curriculum").then((data) => setLevels(data.levels)).catch(() => setLevels([])); }, []);
+  const [progress, setProgress] = useState<Progress[]>([]);
+
+  function load() {
+    api<{ levels: Level[]; progress: Progress[] }>("/me/progress")
+      .then((data) => { setLevels(data.levels); setProgress(data.progress); })
+      .catch(() => setLevels([]));
+  }
+  useEffect(load, []);
+
   return (
     <div>
-      <PageIntro title="Materials" lede="Open the project guide and learning links for each project. Manuscripts stay with you." />
-      {levels.length === 0 && <p className="text-sm text-muted-foreground">No materials yet.</p>}
-      <div className="flex flex-col gap-3">
-        {levels.map((level) => (
-          <Card key={level.id} className="p-4">
-            <h2 className="font-serif text-xl">Level {level.number}: {level.name}</h2>
-            {level.projects.map((project) => (
-              <div key={project.id} className="mt-2">
-                <p className="font-medium">{project.title}</p>
-                {project.materials.length === 0 && <p className="text-sm text-muted-foreground">No files or links yet.</p>}
-                {project.materials.map((material) => <MaterialLink key={material.id} material={material} />)}
-              </div>
-            ))}
-          </Card>
-        ))}
-      </div>
+      <PageIntro title="Curriculum" lede="Levels unlock in order. Open the learning materials for the level you are on. Manuscripts stay with you." />
+      <MemberCurriculum
+        levels={levels}
+        progress={progress}
+        onSelect={(projectId) => {
+          api(`/me/projects/${projectId}/select`, { method: "POST", body: "{}" })
+            .then(() => { toast.success("Project selected"); load(); })
+            .catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not select"));
+        }}
+      />
     </div>
   );
 }

@@ -338,7 +338,8 @@ export async function activityFeed(limit = 40) {
     "user.reinstate": "Account reinstated",
     "announcement.create": "Announcement sent",
     "settings.update": "Organization settings updated",
-    "curriculum.link": "Curriculum material added",
+    "curriculum.publish": "Curriculum published",
+    "curriculum.rollback": "Curriculum restored",
     "removal.request": "Removal requested",
   };
 

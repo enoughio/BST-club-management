@@ -258,6 +258,7 @@ settingsRouter.get(
         defaultFeeAmount: 150000,
         defaultCurrency: "INR",
         supportEmail: null,
+        requireGuideFile: true,
       },
     });
   }),
@@ -274,6 +275,7 @@ settingsRouter.patch(
         defaultFeeAmount: z.number().int().positive().optional(),
         defaultCurrency: z.string().length(3).optional(),
         supportEmail: z.string().email().optional().nullable(),
+        requireGuideFile: z.boolean().optional(),
       })
       .parse(req.body);
     const settings = await prisma.orgSettings.upsert({
@@ -285,6 +287,7 @@ settingsRouter.patch(
         defaultFeeAmount: body.defaultFeeAmount || 150000,
         defaultCurrency: body.defaultCurrency || "INR",
         supportEmail: body.supportEmail || null,
+        requireGuideFile: body.requireGuideFile ?? true,
       },
       update: {
         name: body.name,
@@ -292,6 +295,7 @@ settingsRouter.patch(
         defaultFeeAmount: body.defaultFeeAmount,
         defaultCurrency: body.defaultCurrency?.toUpperCase(),
         supportEmail: body.supportEmail,
+        requireGuideFile: body.requireGuideFile,
       },
     });
     const { writeAudit } = await import("../lib/audit");
