@@ -25,6 +25,14 @@
   --radius: 0.85rem;
 }
 
+.member-theme {
+  --primary: 221 83% 40%;
+  --primary-foreground: 210 40% 98%;
+  --accent: 0 72% 46%;
+  --accent-foreground: 0 0% 100%;
+  --ring: 221 83% 40%;
+}
+
 * { border-color: hsl(var(--border)); }
 
 body {

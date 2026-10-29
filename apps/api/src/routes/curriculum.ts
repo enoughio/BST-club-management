@@ -400,7 +400,20 @@ progressRouter.get(
     const [levels, progress, certificates] = await Promise.all([
       prisma.level.findMany({ orderBy: { number: "asc" }, include: treeInclude }),
       prisma.memberProject.findMany({ where: { userId: user.id }, include: { project: true, evaluator: { select: { id: true, name: true } } } }),
-      prisma.certificate.findMany({ where: { userId: user.id }, orderBy: { issuedAt: "desc" } }),
+      prisma.certificate.findMany({
+        where: { userId: user.id },
+        orderBy: { issuedAt: "desc" },
+        include: {
+          memberProject: {
+            select: {
+              score: true,
+              feedback: true,
+              project: { select: { title: true } },
+              evaluator: { select: { name: true } },
+            },
+          },
+        },
+      }),
     ]);
     const approved = new Set(progress.filter((row) => row.approved).map((row) => row.projectId));
     let open = true;

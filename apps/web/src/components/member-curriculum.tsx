@@ -41,13 +41,13 @@ export function MemberCurriculum({
             <div className="mt-3 flex flex-col gap-2">
               {level.projects.map((project, projectIndex) => {
                 const row = progress.find((item) => item.projectId === project.id);
-                const simulatedState = index > 0 ? "Locked" : projectIndex === 0 ? "In progress" : "Not started";
-                const state = simulated ? simulatedState : row?.approved ? "Approved" : row ? "In progress" : unlocked ? "Not started" : "Locked";
+                const simulatedState = index > 0 ? "Locked" : projectIndex === 0 ? "In Progress" : "Available";
+                const state = simulated ? simulatedState : row?.approved ? "Approved" : row ? "In Progress" : unlocked ? "Available" : "Locked";
                 return (
                   <Card key={project.id} className={unlocked ? "p-4" : "p-4 opacity-80"}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="font-medium">{project.title || "Untitled project"}</p>
-                      <Badge className={state === "Approved" ? "bg-emerald-100 text-emerald-900" : state === "In progress" ? "bg-sky-100 text-sky-900" : state === "Locked" ? "bg-amber-100 text-amber-950" : ""}>{state}{row?.approved && row.score != null ? ` · ${row.score}` : ""}</Badge>
+                      <Badge className={state === "Approved" ? "bg-blue-100 text-blue-900" : state === "In Progress" ? "bg-red-100 text-red-900" : state === "Available" ? "bg-card text-foreground" : "bg-red-50 text-red-800"}>{state}{row?.approved && row.score != null ? ` · ${row.score}` : ""}</Badge>
                     </div>
                     {project.description && <p className="mt-2 text-sm text-muted-foreground">{project.description}</p>}
                     {project.evaluationCriteria && <p className="mt-2 text-sm"><span className="font-medium">Evaluation criteria. </span>{project.evaluationCriteria}</p>}

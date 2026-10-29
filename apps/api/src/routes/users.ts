@@ -334,22 +334,23 @@ profileRouter.get(
     const clubIds = memberships.map((row) => row.clubId);
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-    const [upcoming, attended] = await Promise.all([
+    const [upcoming, past] = await Promise.all([
       prisma.meeting.findMany({
         where: { clubId: { in: clubIds }, status: "FINALIZED", meetingDate: { gte: today } },
         include: { club: { select: { id: true, name: true } }, rsvps: { where: { userId: user.id } }, agenda: { where: { assigneeId: user.id } } },
         orderBy: { meetingDate: "asc" },
       }),
       prisma.meeting.findMany({
-        where: {
-          clubId: { in: clubIds },
-          status: "COMPLETED",
-          OR: [{ attendance: { some: { userId: user.id, present: true } } }, { agenda: { some: { assigneeId: user.id } } }],
+        where: { clubId: { in: clubIds }, status: "COMPLETED" },
+        include: {
+          club: { select: { id: true, name: true } },
+          attendance: { where: { userId: user.id }, select: { present: true, late: true } },
+          agenda: { where: { assigneeId: user.id } },
         },
-        include: { club: { select: { id: true, name: true } }, agenda: { where: { assigneeId: user.id } } },
         orderBy: { meetingDate: "desc" },
       }),
     ]);
-    res.json({ upcoming, attended });
+    const attended = past.filter((meeting) => meeting.attendance.some((row) => row.present) || meeting.agenda.length > 0);
+    res.json({ upcoming, past, attended });
   }),
 );

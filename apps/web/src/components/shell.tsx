@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell, Menu } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useDashboardBus } from "@/components/dashboard-bus";
@@ -41,6 +41,8 @@ export function AppFrame({
   primaryCount = 4,
   rail,
   onAlerts,
+  nav = "tabs",
+  theme,
   children,
 }: {
   title: string;
@@ -48,6 +50,8 @@ export function AppFrame({
   primaryCount?: number;
   rail?: React.ReactNode;
   onAlerts?: () => void;
+  nav?: "tabs" | "drawer";
+  theme?: "member";
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -55,6 +59,7 @@ export function AppFrame({
   const { user, refresh } = useSession();
   const { alertCount } = useDashboardBus();
   const [notesOpen, setNotesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [notes, setNotes] = useState<{ id: string; title: string; body: string; readAt: string | null; link: string | null }[]>([]);
 
   useEffect(() => {
@@ -70,16 +75,23 @@ export function AppFrame({
   }
 
   return (
-    <div className="flex min-h-screen flex-col md:h-screen md:flex-row md:overflow-hidden">
+    <div className={`flex min-h-screen flex-col md:h-screen md:flex-row md:overflow-hidden ${theme === "member" ? "member-theme" : ""}`}>
       <div className="w-full flex-none md:h-full md:w-60 md:overflow-y-auto">
-        <Sidebar title={title} items={items} primaryCount={primaryCount} onLogout={() => void logout()} />
+        <Sidebar title={title} items={items} primaryCount={primaryCount} mobile={nav} menuOpen={menuOpen} onMenuOpenChange={setMenuOpen} onLogout={() => void logout()} />
       </div>
 
-      <div className="flex min-w-0 flex-grow flex-col pb-24 md:h-full md:pb-0">
-        <header className="sticky top-0 z-30 flex flex-none items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur md:static">
-          <div>
-            <p className="font-serif text-lg leading-none">{title}</p>
-            <p className="text-xs text-muted-foreground">{user?.name}</p>
+      <div className={`flex min-w-0 flex-grow flex-col md:h-full ${nav === "drawer" ? "" : "pb-24 md:pb-0"}`}>
+        <header className="sticky top-0 z-30 flex flex-none items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur md:static">
+          <div className="flex min-w-0 items-center gap-2">
+            {nav === "drawer" && (
+              <Button variant="outline" size="icon" className="md:hidden" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
+            <div className="min-w-0">
+              <p className="truncate font-serif text-lg leading-none">{title}</p>
+              <p className="truncate text-xs text-muted-foreground">{user?.name}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {onAlerts && (
