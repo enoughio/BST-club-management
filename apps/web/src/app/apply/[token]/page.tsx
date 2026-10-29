@@ -19,6 +19,17 @@ type FormState = {
   city: string;
   occupation: string;
   goals: string;
+  school: string;
+  grade: string;
+  guardianName: string;
+  guardianPhone: string;
+  guardianEmail: string;
+  secondGuardianName: string;
+  secondGuardianPhone: string;
+  secondGuardianEmail: string;
+  consentPhoto: boolean;
+  consentParticipation: boolean;
+  consentData: boolean;
 };
 
 type Payload = {
@@ -27,7 +38,7 @@ type Payload = {
   razorpay: { configured: boolean; keyId: string };
 };
 
-const empty: FormState = { name: "", email: "", phone: "", dateOfBirth: "", gender: "", address: "", city: "", occupation: "", goals: "" };
+const empty: FormState = { name: "", email: "", phone: "", dateOfBirth: "", gender: "", address: "", city: "", occupation: "", goals: "", school: "", grade: "", guardianName: "", guardianPhone: "", guardianEmail: "", secondGuardianName: "", secondGuardianPhone: "", secondGuardianEmail: "", consentPhoto: false, consentParticipation: false, consentData: false };
 
 export default function ApplyPage() {
   const token = String(useParams().token);
@@ -59,7 +70,7 @@ export default function ApplyPage() {
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : "This link is not available"));
   }, [token]);
 
-  function set<K extends keyof FormState>(key: K, value: string) {
+  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -122,12 +133,25 @@ export default function ApplyPage() {
           <Field label="Full name"><Input value={form.name} onChange={(event) => set("name", event.target.value)} required /></Field>
           <Field label="Email"><Input type="email" value={form.email} readOnly /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
-          <Field label="Date of birth"><Input type="date" value={form.dateOfBirth} onChange={(event) => set("dateOfBirth", event.target.value)} /></Field>
+          <Field label="Child's date of birth"><Input type="date" value={form.dateOfBirth} onChange={(event) => set("dateOfBirth", event.target.value)} /></Field>
+          <Field label="School"><Input value={form.school} onChange={(event) => set("school", event.target.value)} /></Field>
+          <Field label="Grade"><Input value={form.grade} onChange={(event) => set("grade", event.target.value)} placeholder="4" /></Field>
           <Field label="Gender"><Input value={form.gender} onChange={(event) => set("gender", event.target.value)} /></Field>
           <Field label="Address"><Input value={form.address} onChange={(event) => set("address", event.target.value)} /></Field>
           <Field label="City"><Input value={form.city} onChange={(event) => set("city", event.target.value)} /></Field>
           <Field label="Occupation"><Input value={form.occupation} onChange={(event) => set("occupation", event.target.value)} /></Field>
           <Field label="Goals"><Textarea value={form.goals} onChange={(event) => set("goals", event.target.value)} /></Field>
+          <h2 className="font-serif text-2xl">Parents and guardians</h2>
+          <Field label="Guardian name"><Input value={form.guardianName} onChange={(event) => set("guardianName", event.target.value)} /></Field>
+          <Field label="Guardian mobile"><Input value={form.guardianPhone} onChange={(event) => set("guardianPhone", event.target.value)} /></Field>
+          <Field label="Guardian email"><Input type="email" value={form.guardianEmail} onChange={(event) => set("guardianEmail", event.target.value)} /></Field>
+          <Field label="Second guardian name"><Input value={form.secondGuardianName} onChange={(event) => set("secondGuardianName", event.target.value)} /></Field>
+          <Field label="Second guardian mobile"><Input value={form.secondGuardianPhone} onChange={(event) => set("secondGuardianPhone", event.target.value)} /></Field>
+          <Field label="Second guardian email"><Input type="email" value={form.secondGuardianEmail} onChange={(event) => set("secondGuardianEmail", event.target.value)} /></Field>
+          <h2 className="font-serif text-2xl">Consent</h2>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentPhoto} onChange={(event) => set("consentPhoto", event.target.checked)} /> Photos</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentParticipation} onChange={(event) => set("consentParticipation", event.target.checked)} /> Participation</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentData} onChange={(event) => set("consentData", event.target.checked)} /> Data handling</label>
           <div className="rounded-xl border bg-card p-4">
             <p className="text-sm text-muted-foreground">Membership fee</p>
             <p className="font-serif text-3xl">{money(payload.club.membershipFeeAmount, payload.club.currency)}</p>

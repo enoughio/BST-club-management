@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
-import { titleCase } from "@/lib/format";
+import { ageOn, gradeLabel, nextBirthday } from "@/lib/child";
+import { titleCase, when } from "@/lib/format";
 
 const LIMIT = 25;
 
@@ -52,7 +53,11 @@ export default function HqMembersPage() {
           <tbody>
             {users.map((user) => (
               <tr key={user.id} className="border-t">
-                <td className="p-3"><Link href={`/members/${user.id}`}>{user.name}</Link></td>
+                <td className="p-3">
+                  <Link href={`/members/${user.id}`}>{user.name}</Link>
+                  {user.dateOfBirth && <span className="block text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</span>}
+                  <SchoolBadge user={user} />
+                </td>
                 <td className="p-3">{user.email}</td>
                 <td className="p-3">{titleCase(user.status)}</td>
                 <td className="p-3">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</td>
@@ -72,11 +77,19 @@ export default function HqMembersPage() {
   );
 }
 
+function SchoolBadge({ user }: { user: HqMember }) {
+  const label = [gradeLabel(user.grade), user.school].filter(Boolean).join(" · ");
+  if (!label) return null;
+  return <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-900">{label}</span>;
+}
+
 function MemberCard({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
   return (
     <Card className="p-4">
       <Link href={`/members/${user.id}`} className="font-medium">{user.name}</Link>
       <p className="text-sm text-muted-foreground">{user.email}</p>
+      {user.dateOfBirth && <p className="text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</p>}
+      <SchoolBadge user={user} />
       <p className="text-sm">{titleCase(user.status)} · {user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</p>
       <div className="mt-3"><MemberActions user={user} onChanged={onChanged} /></div>
     </Card>

@@ -174,46 +174,263 @@ async function main() {
 
   const [harbour, deccan, garden, capital, coastal] = clubs;
 
-  async function user(email: string, name: string, city: string, role: "SUPER_ADMIN" | "USER" = "USER") {
-    return prisma.user.create({
-      data: { email, name, city, passwordHash, role, status: "ACTIVE", phone: "9800000000", occupation: "Professional", goals: "Speak with more clarity." },
+  type Child = {
+    dateOfBirth: string;
+    school: string;
+    grade: string;
+    gradeAtJoin: string;
+    guardianName: string;
+    guardianPhone: string;
+    guardianEmail: string;
+    secondGuardianName: string;
+    secondGuardianPhone: string;
+    secondGuardianEmail: string;
+    consentPhoto?: boolean;
+    consentParticipation?: boolean;
+    consentData?: boolean;
+  };
+  const gradeAtJoin = new Map<string, string>();
+
+  async function user(email: string, name: string, city: string, role: "SUPER_ADMIN" | "USER" = "USER", child?: Child) {
+    const created = await prisma.user.create({
+      data: {
+        email,
+        name,
+        city,
+        passwordHash,
+        role,
+        status: "ACTIVE",
+        phone: "9800000000",
+        occupation: child ? "Student" : "Professional",
+        goals: "Speak with more clarity.",
+        consentPhoto: child ? child.consentPhoto ?? true : true,
+        consentParticipation: child ? child.consentParticipation ?? true : true,
+        consentData: child ? child.consentData ?? true : true,
+        ...(child
+          ? {
+              dateOfBirth: new Date(`${child.dateOfBirth}T00:00:00.000Z`),
+              school: child.school,
+              grade: child.grade,
+              guardianName: child.guardianName,
+              guardianPhone: child.guardianPhone,
+              guardianEmail: child.guardianEmail,
+              secondGuardianName: child.secondGuardianName,
+              secondGuardianPhone: child.secondGuardianPhone,
+              secondGuardianEmail: child.secondGuardianEmail,
+            }
+          : {}),
+      },
     });
+    if (child) gradeAtJoin.set(created.id, child.gradeAtJoin);
+    return created;
   }
 
   const superAdmin = await user("super@clubportal.local", "HQ Admin", "Mumbai", "SUPER_ADMIN");
   const aisha = await user("admin@clubportal.local", "Aisha Kapoor", "Mumbai");
-  const rohan = await user("member@clubportal.local", "Rohan Mehta", "Mumbai");
-  const neha = await user("neha.shah@clubportal.local", "Neha Shah", "Mumbai");
-  const vikram = await user("vikram.iyer@clubportal.local", "Vikram Iyer", "Mumbai");
-  const sara = await user("sara.qureshi@clubportal.local", "Sara Qureshi", "Mumbai");
-  const leela = await user("leela.nair@clubportal.local", "Leela Nair", "Mumbai");
-  const imran = await user("imran.das@clubportal.local", "Imran Das", "Mumbai");
-  const tara = await user("tara.bose@clubportal.local", "Tara Bose", "Mumbai");
+  const rohan = await user("member@clubportal.local", "Rohan Mehta", "Mumbai", "USER", {
+    dateOfBirth: "2016-11-12",
+    school: "Delhi Public School",
+    grade: "4",
+    gradeAtJoin: "2",
+    guardianName: "Meera Mehta",
+    guardianPhone: "9811111111",
+    guardianEmail: "meera.mehta@example.com",
+    secondGuardianName: "Anil Mehta",
+    secondGuardianPhone: "9822222222",
+    secondGuardianEmail: "anil.mehta@example.com",
+    consentPhoto: false,
+  });
+  const neha = await user("neha.shah@clubportal.local", "Neha Shah", "Mumbai", "USER", {
+    dateOfBirth: "2015-11-04",
+    school: "Bombay Scottish School",
+    grade: "5",
+    gradeAtJoin: "3",
+    guardianName: "Rekha Shah",
+    guardianPhone: "9811001001",
+    guardianEmail: "rekha.shah@example.com",
+    secondGuardianName: "Nitin Shah",
+    secondGuardianPhone: "9811001002",
+    secondGuardianEmail: "nitin.shah@example.com",
+  });
+  const vikram = await user("vikram.iyer@clubportal.local", "Vikram Iyer", "Mumbai", "USER", {
+    dateOfBirth: "2013-03-14",
+    school: "Cathedral and John Connon",
+    grade: "8",
+    gradeAtJoin: "6",
+    guardianName: "Lakshmi Iyer",
+    guardianPhone: "9811002001",
+    guardianEmail: "lakshmi.iyer@example.com",
+    secondGuardianName: "Suresh Iyer",
+    secondGuardianPhone: "9811002002",
+    secondGuardianEmail: "suresh.iyer@example.com",
+  });
+  const sara = await user("sara.qureshi@clubportal.local", "Sara Qureshi", "Mumbai", "USER", {
+    dateOfBirth: "2017-01-22",
+    school: "Campion School",
+    grade: "3",
+    gradeAtJoin: "1",
+    guardianName: "Fatima Qureshi",
+    guardianPhone: "9811003001",
+    guardianEmail: "fatima.qureshi@example.com",
+    secondGuardianName: "Imtiaz Qureshi",
+    secondGuardianPhone: "9811003002",
+    secondGuardianEmail: "imtiaz.qureshi@example.com",
+    consentData: false,
+  });
+  const leela = await user("leela.nair@clubportal.local", "Leela Nair", "Mumbai", "USER", {
+    dateOfBirth: "2014-06-09",
+    school: "Arya Vidya Mandir",
+    grade: "6",
+    gradeAtJoin: "4",
+    guardianName: "Radha Nair",
+    guardianPhone: "9811004001",
+    guardianEmail: "radha.nair@example.com",
+    secondGuardianName: "Mohan Nair",
+    secondGuardianPhone: "9811004002",
+    secondGuardianEmail: "mohan.nair@example.com",
+  });
+  const imran = await user("imran.das@clubportal.local", "Imran Das", "Mumbai", "USER", {
+    dateOfBirth: "2012-09-30",
+    school: "Ryan International",
+    grade: "9",
+    gradeAtJoin: "7",
+    guardianName: "Seema Das",
+    guardianPhone: "9811005001",
+    guardianEmail: "seema.das@example.com",
+    secondGuardianName: "Prakash Das",
+    secondGuardianPhone: "9811005002",
+    secondGuardianEmail: "prakash.das@example.com",
+  });
+  const tara = await user("tara.bose@clubportal.local", "Tara Bose", "Mumbai", "USER", {
+    dateOfBirth: "2018-11-20",
+    school: "Gokuldham High School",
+    grade: "2",
+    gradeAtJoin: "1",
+    guardianName: "Anjali Bose",
+    guardianPhone: "9811006001",
+    guardianEmail: "anjali.bose@example.com",
+    secondGuardianName: "Rajat Bose",
+    secondGuardianPhone: "9811006002",
+    secondGuardianEmail: "rajat.bose@example.com",
+    consentParticipation: false,
+  });
   const meera = await user("meera.joshi@clubportal.local", "Meera Joshi", "Pune");
-  const arjun = await user("president@clubportal.local", "Arjun Deshmukh", "Pune");
-  const kabir = await user("kabir.rao@clubportal.local", "Kabir Rao", "Pune");
-  const ananya = await user("ananya.kulkarni@clubportal.local", "Ananya Kulkarni", "Pune");
+  const arjun = await user("president@clubportal.local", "Arjun Deshmukh", "Pune", "USER", {
+    dateOfBirth: "2010-02-11",
+    school: "Vikhe Patil Memorial School",
+    grade: "10",
+    gradeAtJoin: "7",
+    guardianName: "Sunita Deshmukh",
+    guardianPhone: "9822001001",
+    guardianEmail: "sunita.deshmukh@example.com",
+    secondGuardianName: "Ajay Deshmukh",
+    secondGuardianPhone: "9822001002",
+    secondGuardianEmail: "ajay.deshmukh@example.com",
+    consentPhoto: false,
+  });
+  const kabir = await user("kabir.rao@clubportal.local", "Kabir Rao", "Pune", "USER", {
+    dateOfBirth: "2016-04-02",
+    school: "Symbiosis School",
+    grade: "4",
+    gradeAtJoin: "1",
+    guardianName: "Pooja Rao",
+    guardianPhone: "9822002001",
+    guardianEmail: "pooja.rao@example.com",
+    secondGuardianName: "Kiran Rao",
+    secondGuardianPhone: "9822002002",
+    secondGuardianEmail: "kiran.rao@example.com",
+  });
+  const ananya = await user("ananya.kulkarni@clubportal.local", "Ananya Kulkarni", "Pune", "USER", {
+    dateOfBirth: "2011-08-19",
+    school: "St. Mary's School",
+    grade: "9",
+    gradeAtJoin: "6",
+    guardianName: "Neeta Kulkarni",
+    guardianPhone: "9822003001",
+    guardianEmail: "neeta.kulkarni@example.com",
+    secondGuardianName: "Sanjay Kulkarni",
+    secondGuardianPhone: "9822003002",
+    secondGuardianEmail: "sanjay.kulkarni@example.com",
+  });
   const priya = await user("priya.nair@clubportal.local", "Priya Nair", "Bengaluru");
-  const farhan = await user("farhan.ali@clubportal.local", "Farhan Ali", "Bengaluru");
-  const diya = await user("diya.menon@clubportal.local", "Diya Menon", "Bengaluru");
+  const farhan = await user("farhan.ali@clubportal.local", "Farhan Ali", "Bengaluru", "USER", {
+    dateOfBirth: "2015-07-21",
+    school: "National Public School",
+    grade: "5",
+    gradeAtJoin: "5",
+    guardianName: "Nazia Ali",
+    guardianPhone: "9845001001",
+    guardianEmail: "nazia.ali@example.com",
+    secondGuardianName: "Sameer Ali",
+    secondGuardianPhone: "9845001002",
+    secondGuardianEmail: "sameer.ali@example.com",
+  });
+  const diya = await user("diya.menon@clubportal.local", "Diya Menon", "Bengaluru", "USER", {
+    dateOfBirth: "2014-11-08",
+    school: "Bishop Cotton Girls' School",
+    grade: "6",
+    gradeAtJoin: "6",
+    guardianName: "Deepa Menon",
+    guardianPhone: "9845002001",
+    guardianEmail: "deepa.menon@example.com",
+    secondGuardianName: "Arun Menon",
+    secondGuardianPhone: "9845002002",
+    secondGuardianEmail: "arun.menon@example.com",
+    consentData: false,
+  });
   const rahul = await user("rahul.verma@clubportal.local", "Rahul Verma", "New Delhi");
-  const sneha = await user("sneha.iyer@clubportal.local", "Sneha Iyer", "New Delhi");
-  const omar = await user("omar.sheikh@clubportal.local", "Omar Sheikh", "New Delhi");
+  const sneha = await user("sneha.iyer@clubportal.local", "Sneha Iyer", "New Delhi", "USER", {
+    dateOfBirth: "2013-12-16",
+    school: "Springdales School",
+    grade: "7",
+    gradeAtJoin: "3",
+    guardianName: "Kavita Iyer",
+    guardianPhone: "9818001001",
+    guardianEmail: "kavita.iyer@example.com",
+    secondGuardianName: "Ramesh Iyer",
+    secondGuardianPhone: "9818001002",
+    secondGuardianEmail: "ramesh.iyer@example.com",
+  });
+  const omar = await user("omar.sheikh@clubportal.local", "Omar Sheikh", "New Delhi", "USER", {
+    dateOfBirth: "2012-05-27",
+    school: "Modern School",
+    grade: "8",
+    gradeAtJoin: "4",
+    guardianName: "Amina Sheikh",
+    guardianPhone: "9818002001",
+    guardianEmail: "amina.sheikh@example.com",
+    secondGuardianName: "Yusuf Sheikh",
+    secondGuardianPhone: "9818002002",
+    secondGuardianEmail: "yusuf.sheikh@example.com",
+  });
   const lakshmi = await user("lakshmi.rao@clubportal.local", "Lakshmi Rao", "Chennai");
-  const hari = await user("hari.menon@clubportal.local", "Hari Menon", "Chennai");
+  const hari = await user("hari.menon@clubportal.local", "Hari Menon", "Chennai", "USER", {
+    dateOfBirth: "2011-01-09",
+    school: "Padma Seshadri Bala Bhavan",
+    grade: "9",
+    gradeAtJoin: "4",
+    guardianName: "Geeta Menon",
+    guardianPhone: "9840001001",
+    guardianEmail: "geeta.menon@example.com",
+    secondGuardianName: "Vijay Menon",
+    secondGuardianPhone: "9840001002",
+    secondGuardianEmail: "vijay.menon@example.com",
+  });
 
-  async function join(userId: string, clubId: string, joinedAt: Date) {
-    await prisma.membership.create({ data: { userId, clubId, status: "ACTIVE", joinedAt } });
+  async function join(person: { id: string }, clubId: string, joinedAt: Date) {
+    await prisma.membership.create({
+      data: { userId: person.id, clubId, status: "ACTIVE", joinedAt, gradeAtJoin: gradeAtJoin.get(person.id) ?? null },
+    });
   }
 
   const harbourJoined = new Date("2024-02-01T00:00:00.000Z");
   for (const member of [aisha, rohan, neha, vikram, sara, leela, imran, tara]) {
-    await join(member.id, harbour.id, harbourJoined);
+    await join(member, harbour.id, harbourJoined);
   }
-  for (const member of [meera, arjun, kabir, ananya]) await join(member.id, deccan.id, new Date("2023-07-01T00:00:00.000Z"));
-  for (const member of [priya, farhan, diya]) await join(member.id, garden.id, new Date("2025-11-15T00:00:00.000Z"));
-  for (const member of [rahul, sneha, omar]) await join(member.id, capital.id, new Date("2022-10-01T00:00:00.000Z"));
-  for (const member of [lakshmi, hari]) await join(member.id, coastal.id, new Date("2021-05-01T00:00:00.000Z"));
+  for (const member of [meera, arjun, kabir, ananya]) await join(member, deccan.id, new Date("2023-07-01T00:00:00.000Z"));
+  for (const member of [priya, farhan, diya]) await join(member, garden.id, new Date("2025-11-15T00:00:00.000Z"));
+  for (const member of [rahul, sneha, omar]) await join(member, capital.id, new Date("2022-10-01T00:00:00.000Z"));
+  for (const member of [lakshmi, hari]) await join(member, coastal.id, new Date("2021-05-01T00:00:00.000Z"));
 
   async function appoint(userId: string, clubId: string) {
     await prisma.clubAdmin.create({ data: { userId, clubId, appointedById: superAdmin.id, appointedAt: monthsAgo(10) } });

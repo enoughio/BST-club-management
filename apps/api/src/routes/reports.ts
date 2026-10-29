@@ -2,6 +2,8 @@ import { Router } from "express";
 import { assertClubAdmin, requireSuperAdmin, requireUser } from "../lib/access";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
+import { upcomingBirthday } from "../lib/child";
+import { prisma } from "../lib/prisma";
 import { activityFeed, clubHealth, drilldown, growthReport, overviewPdfLines, overviewReport, overviewWorkbook, parseRange, pdfBuffer, unpaidByClub, workbookBuffer } from "../lib/reports";
 import type { Response } from "express";
 
@@ -30,6 +32,40 @@ reportsRouter.get(
   "/overview",
   asyncHandler(async (req, res) => {
     res.json(await overviewReport(parseRange(req.query as Record<string, unknown>)));
+  }),
+);
+
+reportsRouter.get(
+  "/children",
+  asyncHandler(async (_req, res) => {
+    const rows = await prisma.membership.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        club: { select: { name: true } },
+        user: { select: { id: true, name: true, dateOfBirth: true, consentPhoto: true, consentParticipation: true, consentData: true } },
+      },
+    });
+    const seen = new Set<string>();
+    const birthdays: { userId: string; name: string; clubName: string; days: number; date: string }[] = [];
+    const consentGaps: { userId: string; name: string; clubName: string; missing: string[] }[] = [];
+    for (const row of rows) {
+      if (seen.has(row.user.id)) continue;
+      seen.add(row.user.id);
+      if (row.user.dateOfBirth) {
+        const birthday = upcomingBirthday(row.user.dateOfBirth);
+        if (birthday.days <= 30) {
+          birthdays.push({ userId: row.user.id, name: row.user.name, clubName: row.club.name, days: birthday.days, date: birthday.date.toISOString() });
+        }
+      }
+      const missing = [
+        !row.user.consentPhoto && "photos",
+        !row.user.consentParticipation && "participation",
+        !row.user.consentData && "data handling",
+      ].filter((item): item is string => Boolean(item));
+      if (missing.length) consentGaps.push({ userId: row.user.id, name: row.user.name, clubName: row.club.name, missing });
+    }
+    birthdays.sort((a, b) => a.days - b.days);
+    res.json({ birthdays, consentGaps });
   }),
 );
 

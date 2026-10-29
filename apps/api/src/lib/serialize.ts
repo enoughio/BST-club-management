@@ -12,6 +12,17 @@ const userSelect = {
   city: true,
   occupation: true,
   goals: true,
+  school: true,
+  grade: true,
+  guardianName: true,
+  guardianPhone: true,
+  guardianEmail: true,
+  secondGuardianName: true,
+  secondGuardianPhone: true,
+  secondGuardianEmail: true,
+  consentPhoto: true,
+  consentParticipation: true,
+  consentData: true,
   avatarKey: true,
   role: true,
   status: true,
@@ -22,7 +33,7 @@ export function publicFileUrl(key: string | null | undefined) {
   return `/api/v1/files/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-export function userCore(user: Pick<User, "id" | "email" | "name" | "phone" | "dateOfBirth" | "gender" | "address" | "city" | "occupation" | "goals" | "avatarKey" | "role" | "status">) {
+export function userCore(user: Pick<User, "id" | "email" | "name" | "phone" | "dateOfBirth" | "gender" | "address" | "city" | "occupation" | "goals" | "school" | "grade" | "guardianName" | "guardianPhone" | "guardianEmail" | "secondGuardianName" | "secondGuardianPhone" | "secondGuardianEmail" | "consentPhoto" | "consentParticipation" | "consentData" | "avatarKey" | "role" | "status">) {
   return {
     id: user.id,
     email: user.email,
@@ -34,6 +45,17 @@ export function userCore(user: Pick<User, "id" | "email" | "name" | "phone" | "d
     city: user.city,
     occupation: user.occupation,
     goals: user.goals,
+    school: user.school,
+    grade: user.grade,
+    guardianName: user.guardianName,
+    guardianPhone: user.guardianPhone,
+    guardianEmail: user.guardianEmail,
+    secondGuardianName: user.secondGuardianName,
+    secondGuardianPhone: user.secondGuardianPhone,
+    secondGuardianEmail: user.secondGuardianEmail,
+    consentPhoto: user.consentPhoto,
+    consentParticipation: user.consentParticipation,
+    consentData: user.consentData,
     avatarUrl: publicFileUrl(user.avatarKey),
     role: user.role,
     status: user.status,

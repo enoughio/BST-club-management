@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
+import { roleIcon } from "@/lib/child";
 import { titleCase, when } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import type { AgendaItem, Meeting } from "@/lib/types";
@@ -42,7 +43,7 @@ export default function MyMeetingsPage() {
       )}
       <div className="flex flex-col gap-3">
         {upcoming.map((meeting) => {
-          const roles = (meeting.agenda || []).map((item) => titleCase(item.role));
+          const roles = (meeting.agenda || []).map((item) => `${roleIcon(item.role)} ${titleCase(item.role)}`);
           const rsvp = meeting.rsvps?.[0]?.status;
           return (
             <Card key={meeting.id} className="p-4">
@@ -79,7 +80,7 @@ function PastMeeting({ meeting, userId }: { meeting: Row; userId: string }) {
   const [score, setScore] = useState("80");
   const record = meeting.attendance?.[0];
   const attendance = !record ? "Absent" : record.late ? "Late" : record.present ? "Present" : "Absent";
-  const roles = (meeting.agenda || []).map((item) => titleCase(item.role));
+  const roles = (meeting.agenda || []).map((item) => `${roleIcon(item.role)} ${titleCase(item.role)}`);
   const evalItem = (meeting.agenda || []).find((item) => item.role === "SPEECH_EVALUATOR" && item.assigneeId === userId);
   return (
     <Card className="p-4">

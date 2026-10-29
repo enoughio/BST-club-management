@@ -6,6 +6,7 @@ import { writeAudit } from "../lib/audit";
 import { meetingMoment, parseDateOnly, startOfUtcDay } from "../lib/dates";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
+import { noticeEmails } from "../lib/child";
 import { sendMeetingNotice } from "../lib/mailer";
 import { notifyUsers } from "../lib/notify";
 import { prisma } from "../lib/prisma";
@@ -439,7 +440,7 @@ async function emailMeeting(
 ) {
   const members = await prisma.membership.findMany({
     where: { clubId: meeting.clubId, status: "ACTIVE" },
-    include: { user: { select: { id: true, email: true, name: true } } },
+    include: { user: { select: { id: true, email: true, name: true, guardianEmail: true, secondGuardianEmail: true } } },
   });
   const when = `${meeting.meetingDate.toISOString().slice(0, 10)} ${meeting.startTime}`;
   const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/me/meetings`;
@@ -453,8 +454,8 @@ async function emailMeeting(
   await Promise.all(
     members.map((member) => {
       const assignment = meeting.agenda.find((item) => item.assigneeId === member.user.id);
-      return sendMeetingNotice({
-        to: member.user.email,
+      return Promise.all(noticeEmails(member.user).map((to) => sendMeetingNotice({
+        to,
         clubName: meeting.club.name,
         when,
         place: meeting.place,
@@ -463,7 +464,7 @@ async function emailMeeting(
         reason,
         agenda,
         url,
-      }).catch((error) => console.error(error));
+      }).catch((error) => console.error(error))));
     }),
   );
 }

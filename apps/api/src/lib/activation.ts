@@ -3,6 +3,7 @@ import { HttpError } from "./errors";
 import { sendSetPassword } from "./mailer";
 import { createAuthToken } from "./auth";
 import { notifyUser } from "./notify";
+import { blank, childProfileData } from "./child";
 import { prisma } from "./prisma";
 
 export type ApplicationForm = {
@@ -15,6 +16,17 @@ export type ApplicationForm = {
   city?: string | null;
   occupation?: string | null;
   goals?: string | null;
+  school?: string | null;
+  grade?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  guardianEmail?: string | null;
+  secondGuardianName?: string | null;
+  secondGuardianPhone?: string | null;
+  secondGuardianEmail?: string | null;
+  consentPhoto?: boolean;
+  consentParticipation?: boolean;
+  consentData?: boolean;
 };
 
 type PaymentInput = {
@@ -59,6 +71,7 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
       occupation: form.occupation || null,
       goals: form.goals || null,
       dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth) : null,
+      ...childProfileData(form),
     };
 
     let user = await tx.user.findUnique({ where: { email } });
@@ -75,6 +88,7 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
           occupation: form.occupation || null,
           goals: form.goals || null,
           dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth) : null,
+          ...childProfileData(form),
           role: "USER",
           status: "INVITED",
         },
@@ -86,7 +100,7 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
 
     await tx.membership.upsert({
       where: { userId_clubId: { userId: user.id, clubId: existing.clubId } },
-      create: { userId: user.id, clubId: existing.clubId, status: "ACTIVE", joinedAt: new Date(), endedAt: null },
+      create: { userId: user.id, clubId: existing.clubId, status: "ACTIVE", joinedAt: new Date(), endedAt: null, gradeAtJoin: blank(form.grade) },
       update: { status: "ACTIVE", endedAt: null },
     });
 

@@ -30,6 +30,10 @@ type Drill = { id: string; title: string; subtitle: string; value: string | numb
 type UnpaidClub = { clubId: string; name: string; city: string; status: string; currency: string; outstandingMinor: number; admin: { id: string; name: string; email: string; phone: string | null } | null; members: { invoiceId: string; userId: string; name: string; email: string; phone: string | null; amount: number; createdAt: string }[] };
 type Activity = { id: string; at: string; kind: string; title: string; subject: string | null; actor: string; href: string | null };
 type DrillKind = "clubs" | "members" | "meetings" | "dues";
+type ChildWatch = {
+  birthdays: { userId: string; name: string; clubName: string; days: number; date: string }[];
+  consentGaps: { userId: string; name: string; clubName: string; missing: string[] }[];
+};
 
 const DRILL_TITLES: Record<DrillKind, string> = { clubs: "All clubs", members: "Active members", meetings: "Meetings completed", dues: "Dues collected" };
 
@@ -43,12 +47,14 @@ export default function HqHome() {
   const [expandedClub, setExpandedClub] = useState<string | null>(null);
   const [adminFor, setAdminFor] = useState<UnpaidClub | null>(null);
   const [topBy, setTopBy] = useState<"attendance" | "growth">("attendance");
+  const [children, setChildren] = useState<ChildWatch | null>(null);
 
   useEffect(() => {
     api<Overview>(`/reports/overview?${rangeQuery(range)}`).then(setStats).catch(() => setStats(null));
   }, [range]);
   useEffect(() => {
     api<{ items: Activity[] }>("/reports/activity?limit=30").then((data) => setActivity(data.items)).catch(() => setActivity([]));
+    api<ChildWatch>("/reports/children").then(setChildren).catch(() => setChildren(null));
   }, []);
 
   function openDrill(kind: DrillKind) {
@@ -187,6 +193,38 @@ export default function HqHome() {
               </div>
             </div>
           )}
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <h2 className="font-serif text-xl">Birthdays in the next 30 days</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Active members, so clubs can plan a small celebration.</p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {!children && <li className="text-muted-foreground">Loading…</li>}
+            {children && children.birthdays.length === 0 && <li className="text-muted-foreground">No birthdays in the next 30 days.</li>}
+            {children?.birthdays.slice(0, 8).map((row) => (
+              <li key={row.userId} className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-900">
+                <span className="min-w-0"><span className="block truncate font-medium">{row.name}</span><span className="block truncate text-xs">{row.clubName}</span></span>
+                <span className="shrink-0">{row.days === 0 ? "Today" : `${row.days}d`} · {when(row.date)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card className={`p-4 ${children && children.consentGaps.length ? "border-red-300" : ""}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-serif text-xl">Consent gaps</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{children ? `${children.consentGaps.length} active member${children.consentGaps.length === 1 ? "" : "s"} missing a signed form.` : "Photos, participation, and data handling."}</p>
+            </div>
+            <Button variant="outline" size="sm" asChild><Link href="/hq/members">Members</Link></Button>
+          </div>
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {children?.consentGaps.slice(0, 8).map((row) => (
+              <li key={row.userId} className="text-red-900">{row.name} · {row.clubName} · {row.missing.join(", ")}</li>
+            ))}
+            {children && children.consentGaps.length === 0 && <li className="text-muted-foreground">Every active member has consent on file.</li>}
+          </ul>
         </Card>
       </div>
 

@@ -9,7 +9,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ApiError, api } from "@/lib/api";
-import { titleCase } from "@/lib/format";
+import { ageOn, gradeLabel, nextBirthday } from "@/lib/child";
+import { titleCase, when } from "@/lib/format";
 
 export type HqMember = {
   id: string;
@@ -24,6 +25,17 @@ export type HqMember = {
   city: string | null;
   occupation: string | null;
   goals: string | null;
+  school?: string | null;
+  grade?: string | null;
+  guardianName?: string | null;
+  guardianPhone?: string | null;
+  guardianEmail?: string | null;
+  secondGuardianName?: string | null;
+  secondGuardianPhone?: string | null;
+  secondGuardianEmail?: string | null;
+  consentPhoto?: boolean;
+  consentParticipation?: boolean;
+  consentData?: boolean;
   memberships: { clubId: string; clubName: string; status: string }[];
 };
 
@@ -36,6 +48,17 @@ type ProfileDraft = {
   city: string;
   occupation: string;
   goals: string;
+  school: string;
+  grade: string;
+  guardianName: string;
+  guardianPhone: string;
+  guardianEmail: string;
+  secondGuardianName: string;
+  secondGuardianPhone: string;
+  secondGuardianEmail: string;
+  consentPhoto: boolean;
+  consentParticipation: boolean;
+  consentData: boolean;
 };
 
 function draftFrom(user: HqMember): ProfileDraft {
@@ -48,7 +71,38 @@ function draftFrom(user: HqMember): ProfileDraft {
     city: user.city || "",
     occupation: user.occupation || "",
     goals: user.goals || "",
+    school: user.school || "",
+    grade: user.grade || "",
+    guardianName: user.guardianName || "",
+    guardianPhone: user.guardianPhone || "",
+    guardianEmail: user.guardianEmail || "",
+    secondGuardianName: user.secondGuardianName || "",
+    secondGuardianPhone: user.secondGuardianPhone || "",
+    secondGuardianEmail: user.secondGuardianEmail || "",
+    consentPhoto: Boolean(user.consentPhoto),
+    consentParticipation: Boolean(user.consentParticipation),
+    consentData: Boolean(user.consentData),
   };
+}
+
+function ChildFacts({ user }: { user: HqMember }) {
+  const age = user.dateOfBirth ? ageOn(user.dateOfBirth) : null;
+  const birthday = user.dateOfBirth ? nextBirthday(user.dateOfBirth) : null;
+  const school = [gradeLabel(user.grade), user.school].filter(Boolean).join(" · ");
+  const missing = [!user.consentPhoto && "photos", !user.consentParticipation && "participation", !user.consentData && "data handling"].filter(Boolean);
+  return (
+    <div className="mb-2 rounded-xl border p-3 text-sm">
+      <p><span className="text-muted-foreground">Current age. </span>{age != null ? `${age} years` : "Not on file"}</p>
+      <p><span className="text-muted-foreground">Next birthday. </span>{birthday ? `${when(birthday.date.toISOString())}${birthday.days <= 30 ? ` · in ${birthday.days} day${birthday.days === 1 ? "" : "s"}` : ""}` : "Not on file"}</p>
+      {school && <p className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-blue-900">{school}</p>}
+      <p className="mt-2 font-medium">Guardians</p>
+      <p>{user.guardianName || "First guardian not on file"}{user.guardianPhone ? ` · ${user.guardianPhone}` : ""}</p>
+      <p className="truncate text-muted-foreground">{user.guardianEmail || "No email"}</p>
+      <p className="mt-1">{user.secondGuardianName || "Second guardian not on file"}{user.secondGuardianPhone ? ` · ${user.secondGuardianPhone}` : ""}</p>
+      <p className="truncate text-muted-foreground">{user.secondGuardianEmail || "No email"}</p>
+      <p className={`mt-2 ${missing.length ? "text-red-800" : "text-blue-900"}`}>{missing.length ? `Consent missing: ${missing.join(", ")}` : "Consent on file"}</p>
+    </div>
+  );
 }
 
 export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
@@ -105,12 +159,24 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
             <Field label="Address"><Input value={draft.address} onChange={(event) => setDraft({ ...draft, address: event.target.value })} /></Field>
             <Field label="Occupation"><Input value={draft.occupation} onChange={(event) => setDraft({ ...draft, occupation: event.target.value })} /></Field>
             <Field label="Goals"><Textarea value={draft.goals} onChange={(event) => setDraft({ ...draft, goals: event.target.value })} /></Field>
+            <Field label="School"><Input value={draft.school} onChange={(event) => setDraft({ ...draft, school: event.target.value })} /></Field>
+            <Field label="Grade"><Input value={draft.grade} onChange={(event) => setDraft({ ...draft, grade: event.target.value })} /></Field>
+            <Field label="Guardian name"><Input value={draft.guardianName} onChange={(event) => setDraft({ ...draft, guardianName: event.target.value })} /></Field>
+            <Field label="Guardian mobile"><Input value={draft.guardianPhone} onChange={(event) => setDraft({ ...draft, guardianPhone: event.target.value })} /></Field>
+            <Field label="Guardian email"><Input type="email" value={draft.guardianEmail} onChange={(event) => setDraft({ ...draft, guardianEmail: event.target.value })} /></Field>
+            <Field label="Second guardian name"><Input value={draft.secondGuardianName} onChange={(event) => setDraft({ ...draft, secondGuardianName: event.target.value })} /></Field>
+            <Field label="Second guardian mobile"><Input value={draft.secondGuardianPhone} onChange={(event) => setDraft({ ...draft, secondGuardianPhone: event.target.value })} /></Field>
+            <Field label="Second guardian email"><Input type="email" value={draft.secondGuardianEmail} onChange={(event) => setDraft({ ...draft, secondGuardianEmail: event.target.value })} /></Field>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.consentPhoto} onChange={(event) => setDraft({ ...draft, consentPhoto: event.target.checked })} /> Photo consent</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.consentParticipation} onChange={(event) => setDraft({ ...draft, consentParticipation: event.target.checked })} /> Participation consent</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft.consentData} onChange={(event) => setDraft({ ...draft, consentData: event.target.checked })} /> Data handling consent</label>
             <Button type="submit">Review changes</Button>
             <Button type="button" variant="outline" onClick={() => setEditing(false)}>Back</Button>
           </form>
         ) : (
           <div className="flex flex-col gap-2">
-            <Button variant="outline" asChild><Link href={`/members/${user.id}`}>View profile</Link></Button>
+            <ChildFacts user={user} />
+            <Button variant="outline" asChild><Link href={`/members/${user.id}`}>Public directory card</Link></Button>
             <Button variant="outline" onClick={() => setEditing(true)}>Edit profile</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setFreezeOpen(true); }}>Freeze</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setReinstateOpen(true); }}>Reinstate</Button>
@@ -192,6 +258,17 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
               city: draft.city || null,
               occupation: draft.occupation || null,
               goals: draft.goals || null,
+              school: draft.school || null,
+              grade: draft.grade || null,
+              guardianName: draft.guardianName || null,
+              guardianPhone: draft.guardianPhone || null,
+              guardianEmail: draft.guardianEmail || null,
+              secondGuardianName: draft.secondGuardianName || null,
+              secondGuardianPhone: draft.secondGuardianPhone || null,
+              secondGuardianEmail: draft.secondGuardianEmail || null,
+              consentPhoto: draft.consentPhoto,
+              consentParticipation: draft.consentParticipation,
+              consentData: draft.consentData,
             }),
           }),
           "Profile updated",

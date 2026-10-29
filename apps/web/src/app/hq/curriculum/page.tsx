@@ -3,8 +3,8 @@
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, GripVertical, History, Lock, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, GripVertical, History, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MemberCurriculum } from "@/components/member-curriculum";
 import { Field, PageIntro } from "@/components/shell";
@@ -30,6 +30,7 @@ export default function CurriculumPage() {
   const [progressCounts, setProgressCounts] = useState<Record<string, number>>({});
   const [selectedId, setSelectedId] = useState("");
   const [openIds, setOpenIds] = useState<string[]>([]);
+  const [revealProjectId, setRevealProjectId] = useState<string | null>(null);
   const [preview, setPreview] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -110,13 +111,13 @@ export default function CurriculumPage() {
     const level: CurriculumLevel = { id: newId(), name: "", projects: [] };
     setSelectedId(level.id);
     setOpenIds((current) => [...current, level.id]);
-    stage([...levels, level], "Add a level?", levels);
+    setLevels((current) => [...current, level]);
   }
 
-  function addProject(level: CurriculumLevel) {
+  function addProject(levelId: string) {
     const project: CurriculumProject = { id: newId(), title: "", description: "", evaluationCriteria: "", materials: [] };
-    setSelectedId(level.id);
-    stage(levels.map((item) => (item.id === level.id ? { ...item, projects: [...item.projects, project] } : item)), `Add a project to ${level.name || "this level"}?`, levels);
+    setSelectedId(levelId);
+    setLevels((current) => current.map((item) => (item.id === levelId ? { ...item, projects: [...item.projects, project] } : item)));
   }
 
   function deleteLevel(level: CurriculumLevel) {
@@ -142,10 +143,11 @@ export default function CurriculumPage() {
     : 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-hidden md:py-5">
+      <div className="flex flex-col gap-4 md:shrink-0">
       <PageIntro
         title="Curriculum"
-        lede="Levels unlock in order. Edit a draft, then publish when every project has a title and its learning materials."
+        lede="Edit a draft, then publish when every level and project has a name. Learning materials are optional."
         actions={
           <>
             <Button variant={preview ? "default" : "outline"} onClick={() => setPreview((value) => !value)}>{preview ? "Back to editor" : "Preview as Member"}</Button>
@@ -159,14 +161,15 @@ export default function CurriculumPage() {
           <Button variant="outline" size="sm" onClick={() => setDiscardOpen(true)}>Discard draft</Button>
         </div>
       )}
+      </div>
       {preview ? (
-        <div>
-          <p className="mb-3 text-sm text-muted-foreground">This is the member view of the builder, with locks and progress simulated. Level 1 is open and its first project is in progress. Members will not see it until you publish.</p>
-          <MemberCurriculum levels={levels} simulated />
+        <div className="md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-y-contain">
+          <p className="mb-3 text-sm text-muted-foreground">This is the member view of the builder. Level 1’s first project is shown in progress. Members will not see it until you publish.</p>
+          <MemberCurriculum levels={levels} simulated showLocks={false} />
         </div>
       ) : (
-        <div className="flex flex-col gap-4 lg:h-[calc(100vh-12rem)] lg:flex-row lg:overflow-hidden">
-          <aside className="flex flex-col gap-2 lg:w-80 lg:overflow-y-auto lg:pr-2">
+        <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-y-contain lg:flex-row lg:items-start">
+          <aside className="flex w-full flex-col gap-2 lg:w-80 lg:shrink-0">
             <Button onClick={addLevel}><Plus className="h-4 w-4" /> Add level</Button>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onLevelDragEnd}>
               <SortableContext items={levels.map((level) => level.id)} strategy={verticalListSortingStrategy}>
@@ -184,7 +187,7 @@ export default function CurriculumPage() {
                     }}
                     onOpenProject={(projectId) => {
                       setSelectedId(level.id);
-                      document.getElementById(`project-${projectId}`)?.scrollIntoView({ block: "start" });
+                      setRevealProjectId(projectId);
                     }}
                   />
                 ))}
@@ -192,29 +195,39 @@ export default function CurriculumPage() {
             </DndContext>
             {levels.length === 0 && <p className="text-sm text-muted-foreground">Add the first level to start the path.</p>}
           </aside>
-          <div className="min-w-0 flex-1 lg:overflow-y-auto">
+          <div className="min-w-0 flex-1">
             {!selected && <p className="text-sm text-muted-foreground">Select a level to edit its projects.</p>}
             {selected && (
               <LevelEditor
                 level={selected}
                 index={levels.findIndex((level) => level.id === selected.id)}
-                previousName={levels[levels.findIndex((level) => level.id === selected.id) - 1]?.name}
+                revealProjectId={revealProjectId}
                 issues={issues.filter((issue) => issue.levelId === selected.id)}
                 sensors={sensors}
-                onName={(name) => setLevels(levels.map((level) => (level.id === selected.id ? { ...level, name } : level)))}
-                onAdd={() => addProject(selected)}
+                onName={(name) => {
+                  const levelId = selected.id;
+                  setLevels((current) => current.map((level) => (level.id === levelId ? { ...level, name } : level)));
+                }}
+                onAdd={() => addProject(selected.id)}
                 onDeleteLevel={() => deleteLevel(selected)}
                 onDragEnd={onProjectDragEnd}
-                onProject={(projectId, patch) => setLevels(levels.map((level) => level.id === selected.id ? { ...level, projects: level.projects.map((project) => project.id === projectId ? { ...project, ...patch } : project) } : level))}
-                onMaterials={(projectId, materials) => setLevels(levels.map((level) => level.id === selected.id ? { ...level, projects: level.projects.map((project) => project.id === projectId ? { ...project, materials } : project) } : level))}
+                onProject={(projectId, patch) => {
+                  const levelId = selected.id;
+                  setLevels((current) => current.map((level) => level.id === levelId ? { ...level, projects: level.projects.map((project) => project.id === projectId ? { ...project, ...patch } : project) } : level));
+                }}
+                onMaterials={(projectId, materials) => {
+                  const levelId = selected.id;
+                  setLevels((current) => current.map((level) => level.id === levelId ? { ...level, projects: level.projects.map((project) => project.id === projectId ? { ...project, materials } : project) } : level));
+                }}
                 onDeleteProject={(project) => deleteProject(selected, project)}
                 onSave={(summary) => stage(levels, summary, null)}
                 onUpload={async (projectId, materialId, file) => {
+                  const levelId = selected.id;
                   const body = new FormData();
                   body.set("file", file);
                   try {
                     const uploaded = await api<{ fileKey: string; fileName: string; mimeType: string }>("/curriculum/uploads", { method: "POST", body });
-                    setLevels((current) => current.map((level) => level.id !== selected.id ? level : {
+                    setLevels((current) => current.map((level) => level.id !== levelId ? level : {
                       ...level,
                       projects: level.projects.map((project) => project.id !== projectId ? project : {
                         ...project,
@@ -317,7 +330,6 @@ function LevelRow({ level, index, selected, open, flagged, onSelect, onOpenProje
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
           <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "" : "-rotate-90"}`} />
           <span className="truncate text-sm font-medium">Level {index + 1}: {level.name || "Untitled"}</span>
-          {index > 0 && <Lock className="h-3.5 w-3.5 shrink-0 text-amber-800" aria-label={`Unlocks after Level ${index} completion`} />}
           {flagged && <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" title="This level has something that blocks publishing" />}
         </button>
       </div>
@@ -334,11 +346,11 @@ function LevelRow({ level, index, selected, open, flagged, onSelect, onOpenProje
 }
 
 function LevelEditor({
-  level, index, previousName, issues, sensors, onName, onAdd, onDeleteLevel, onDragEnd, onProject, onMaterials, onDeleteProject, onSave, onUpload,
+  level, index, revealProjectId, issues, sensors, onName, onAdd, onDeleteLevel, onDragEnd, onProject, onMaterials, onDeleteProject, onSave, onUpload,
 }: {
   level: CurriculumLevel;
   index: number;
-  previousName?: string;
+  revealProjectId: string | null;
   issues: CurriculumIssue[];
   sensors: ReturnType<typeof useSensors>;
   onName: (name: string) => void;
@@ -352,18 +364,29 @@ function LevelEditor({
   onUpload: (projectId: string, materialId: string, file: File) => Promise<void>;
 }) {
   const nameIssue = issues.find((issue) => issue.field === "name" && !issue.projectId);
+  const [openProjectIds, setOpenProjectIds] = useState<string[]>([]);
+  const trackedLevelId = useRef(level.id);
+  if (trackedLevelId.current !== level.id) {
+    trackedLevelId.current = level.id;
+    if (openProjectIds.length) setOpenProjectIds([]);
+  }
+  const projectKey = level.projects.map((project) => project.id).join("|");
+  useEffect(() => {
+    if (!revealProjectId || !projectKey.split("|").includes(revealProjectId)) return;
+    setOpenProjectIds((current) => (current.includes(revealProjectId) ? current : [...current, revealProjectId]));
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(`project-${revealProjectId}`)?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [revealProjectId, level.id, projectKey]);
+  function toggleProject(projectId: string) {
+    setOpenProjectIds((current) => (current.includes(projectId) ? current.filter((id) => id !== projectId) : [...current, projectId]));
+  }
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="font-serif text-2xl">Level {index + 1}</h2>
-            {index > 0 && (
-              <span title={`Unlocks after Level ${index} completion`} className="inline-flex items-center gap-1 text-sm text-amber-900">
-                <Lock className="h-4 w-4" /> Members: unlocks after Level {index}{previousName ? ` (${previousName})` : ""} completion
-              </span>
-            )}
-          </div>
+          <h2 className="font-serif text-2xl">Level {index + 1}</h2>
           <Field label="Level name">
             <Input value={level.name} placeholder="Level name" onChange={(event) => onName(event.target.value)} className={nameIssue ? "border-red-500" : ""} />
           </Field>
@@ -382,6 +405,8 @@ function LevelEditor({
                 key={project.id}
                 project={project}
                 index={projectIndex}
+                open={openProjectIds.includes(project.id)}
+                onToggle={() => toggleProject(project.id)}
                 issues={issues.filter((issue) => issue.projectId === project.id)}
                 onChange={(patch) => onProject(project.id, patch)}
                 onMaterials={(materials) => onMaterials(project.id, materials)}
@@ -398,9 +423,11 @@ function LevelEditor({
   );
 }
 
-function ProjectCard({ project, index, issues, onChange, onMaterials, onDelete, onSave, onUpload }: {
+function ProjectCard({ project, index, open, onToggle, issues, onChange, onMaterials, onDelete, onSave, onUpload }: {
   project: CurriculumProject;
   index: number;
+  open: boolean;
+  onToggle: () => void;
   issues: CurriculumIssue[];
   onChange: (patch: Partial<CurriculumProject>) => void;
   onMaterials: (materials: LearningMaterial[]) => void;
@@ -413,14 +440,18 @@ function ProjectCard({ project, index, issues, onChange, onMaterials, onDelete, 
   const materialIssue = issues.find((issue) => issue.field === "materials");
   const guideIssue = issues.find((issue) => issue.field === "guide");
   return (
-    <div id={`project-${project.id}`} ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`rounded-xl border bg-card p-4 shadow-sm ${issues.length ? "border-red-300" : ""}`}>
-      <div className="flex items-start gap-2">
-        <button type="button" className="mt-2 cursor-grab rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Drag to reorder project" {...attributes} {...listeners}><GripVertical className="h-4 w-4" /></button>
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-sm font-medium text-muted-foreground">Project {index + 1}</p>
-            <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Delete project" onClick={onDelete}><Trash2 className="h-4 w-4" /></button>
-          </div>
+    <div id={`project-${project.id}`} ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`rounded-xl border bg-card shadow-sm ${issues.length ? "border-red-300" : ""}`}>
+      <div className="flex items-center gap-2 p-3">
+        <button type="button" className="cursor-grab rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Drag to reorder project" {...attributes} {...listeners}><GripVertical className="h-4 w-4" /></button>
+        <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open} onClick={onToggle}>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "" : "-rotate-90"}`} />
+          <span className="truncate text-sm font-medium">Project {index + 1}: {project.title || "Untitled project"}</span>
+          {issues.length > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" title="This project has something that blocks publishing" />}
+        </button>
+        <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Delete project" onClick={onDelete}><Trash2 className="h-4 w-4" /></button>
+      </div>
+      {open && (
+        <div className="flex flex-col gap-3 border-t px-4 py-4">
           <Field label="Project title">
             <Input value={project.title} placeholder="Project title" onChange={(event) => onChange({ title: event.target.value })} className={titleIssue ? "border-red-500" : ""} />
           </Field>
@@ -459,7 +490,7 @@ function ProjectCard({ project, index, issues, onChange, onMaterials, onDelete, 
           </div>
           <Button type="button" variant="outline" onClick={onSave}>Save project</Button>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -30,6 +30,17 @@ export default function EditProfilePage() {
           city: form.get("city"),
           occupation: form.get("occupation"),
           goals: form.get("goals"),
+          school: form.get("school"),
+          grade: form.get("grade"),
+          guardianName: form.get("guardianName"),
+          guardianPhone: form.get("guardianPhone"),
+          guardianEmail: form.get("guardianEmail") || null,
+          secondGuardianName: form.get("secondGuardianName"),
+          secondGuardianPhone: form.get("secondGuardianPhone"),
+          secondGuardianEmail: form.get("secondGuardianEmail") || null,
+          consentPhoto: form.get("consentPhoto") === "on",
+          consentParticipation: form.get("consentParticipation") === "on",
+          consentData: form.get("consentData") === "on",
         }),
       });
       const file = form.get("file");
@@ -53,11 +64,24 @@ export default function EditProfilePage() {
       <Field label="Name"><Input name="name" defaultValue={user.name} required /></Field>
       <Field label="Phone"><Input name="phone" defaultValue={user.phone || ""} /></Field>
       <Field label="Date of birth"><Input name="dateOfBirth" type="date" defaultValue={dob} /></Field>
+      <Field label="School"><Input name="school" defaultValue={user.school || ""} /></Field>
+      <Field label="Grade"><Input name="grade" defaultValue={user.grade || ""} placeholder="4" /></Field>
       <Field label="Gender"><Input name="gender" defaultValue={user.gender || ""} /></Field>
       <Field label="Address"><Input name="address" defaultValue={user.address || ""} /></Field>
       <Field label="City"><Input name="city" defaultValue={user.city || ""} /></Field>
       <Field label="Occupation"><Input name="occupation" defaultValue={user.occupation || ""} /></Field>
       <Field label="Goals"><Textarea name="goals" defaultValue={user.goals || ""} /></Field>
+      <h2 className="mt-2 font-serif text-2xl">Parents and guardians</h2>
+      <Field label="Guardian name"><Input name="guardianName" defaultValue={user.guardianName || ""} /></Field>
+      <Field label="Guardian mobile"><Input name="guardianPhone" defaultValue={user.guardianPhone || ""} /></Field>
+      <Field label="Guardian email"><Input name="guardianEmail" type="email" defaultValue={user.guardianEmail || ""} /></Field>
+      <Field label="Second guardian name"><Input name="secondGuardianName" defaultValue={user.secondGuardianName || ""} /></Field>
+      <Field label="Second guardian mobile"><Input name="secondGuardianPhone" defaultValue={user.secondGuardianPhone || ""} /></Field>
+      <Field label="Second guardian email"><Input name="secondGuardianEmail" type="email" defaultValue={user.secondGuardianEmail || ""} /></Field>
+      <h2 className="mt-2 font-serif text-2xl">Consent on file</h2>
+      <label className="flex items-center gap-2 text-sm"><input name="consentPhoto" type="checkbox" defaultChecked={user.consentPhoto} /> Photos</label>
+      <label className="flex items-center gap-2 text-sm"><input name="consentParticipation" type="checkbox" defaultChecked={user.consentParticipation} /> Participation</label>
+      <label className="flex items-center gap-2 text-sm"><input name="consentData" type="checkbox" defaultChecked={user.consentData} /> Data handling</label>
       <Field label="Photo"><Input name="file" type="file" accept="image/*" /></Field>
       <Button type="submit" disabled={pending}>Save</Button>
     </form>

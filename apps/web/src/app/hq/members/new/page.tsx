@@ -27,6 +27,17 @@ export default function NewMemberPage() {
           email: form.get("email"),
           phone: form.get("phone"),
           dateOfBirth: form.get("dateOfBirth") || null,
+          school: form.get("school"),
+          grade: form.get("grade"),
+          guardianName: form.get("guardianName"),
+          guardianPhone: form.get("guardianPhone"),
+          guardianEmail: form.get("guardianEmail") || null,
+          secondGuardianName: form.get("secondGuardianName"),
+          secondGuardianPhone: form.get("secondGuardianPhone"),
+          secondGuardianEmail: form.get("secondGuardianEmail") || null,
+          consentPhoto: form.get("consentPhoto") === "on",
+          consentParticipation: form.get("consentParticipation") === "on",
+          consentData: form.get("consentData") === "on",
           gender: form.get("gender"),
           address: form.get("address"),
           city: form.get("city"),
@@ -52,6 +63,17 @@ export default function NewMemberPage() {
       <Field label="Email"><Input name="email" type="email" required /></Field>
       <Field label="Phone"><Input name="phone" /></Field>
       <Field label="Date of birth"><Input name="dateOfBirth" type="date" /></Field>
+      <Field label="School"><Input name="school" /></Field>
+      <Field label="Grade"><Input name="grade" placeholder="4" /></Field>
+      <Field label="Guardian name"><Input name="guardianName" /></Field>
+      <Field label="Guardian mobile"><Input name="guardianPhone" /></Field>
+      <Field label="Guardian email"><Input name="guardianEmail" type="email" /></Field>
+      <Field label="Second guardian name"><Input name="secondGuardianName" /></Field>
+      <Field label="Second guardian mobile"><Input name="secondGuardianPhone" /></Field>
+      <Field label="Second guardian email"><Input name="secondGuardianEmail" type="email" /></Field>
+      <label className="flex items-center gap-2 text-sm"><input name="consentPhoto" type="checkbox" /> Photo consent</label>
+      <label className="flex items-center gap-2 text-sm"><input name="consentParticipation" type="checkbox" /> Participation consent</label>
+      <label className="flex items-center gap-2 text-sm"><input name="consentData" type="checkbox" /> Data handling consent</label>
       <Field label="Gender"><Input name="gender" /></Field>
       <Field label="Address"><Input name="address" /></Field>
       <Field label="City"><Input name="city" /></Field>

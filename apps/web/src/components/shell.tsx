@@ -60,6 +60,7 @@ export function AppFrame({
   const { alertCount } = useDashboardBus();
   const [notesOpen, setNotesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const fitViewport = pathname === "/hq/curriculum";
   const [notes, setNotes] = useState<{ id: string; title: string; body: string; readAt: string | null; link: string | null }[]>([]);
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export function AppFrame({
         <Sidebar title={title} items={items} primaryCount={primaryCount} mobile={nav} menuOpen={menuOpen} onMenuOpenChange={setMenuOpen} onLogout={() => void logout()} />
       </div>
 
-      <div className={`flex min-w-0 flex-grow flex-col md:h-full ${nav === "drawer" ? "" : "pb-24 md:pb-0"}`}>
+      <div className={`flex min-w-0 flex-grow flex-col md:h-full ${fitViewport ? "md:min-h-0 md:overflow-hidden" : ""} ${nav === "drawer" ? "" : "pb-24 md:pb-0"}`}>
         <header className="sticky top-0 z-30 flex flex-none items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur md:static">
           <div className="flex min-w-0 items-center gap-2">
             {nav === "drawer" && (
@@ -105,7 +106,7 @@ export function AppFrame({
             </Button>
           </div>
         </header>
-        <main className="w-full flex-grow px-4 py-5 md:overflow-y-auto md:px-6">{children}</main>
+        <main className={fitViewport ? "flex w-full flex-col px-4 py-5 md:min-h-0 md:flex-1 md:overflow-hidden md:px-6 md:py-0" : "w-full flex-grow px-4 py-5 md:overflow-y-auto md:px-6"}>{children}</main>
       </div>
 
       {rail && <aside className="hidden w-80 flex-none border-l bg-card lg:block lg:h-full lg:overflow-y-auto">{rail}</aside>}

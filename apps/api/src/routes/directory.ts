@@ -72,6 +72,7 @@ directoryRouter.get(
         avatarKey: true,
         role: true,
         status: true,
+        // Date of birth, school, grade, and guardian contacts stay off the public directory.
         memberships: { include: { club: { select: { id: true, name: true, slug: true } } } },
       },
     });

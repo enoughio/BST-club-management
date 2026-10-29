@@ -9,6 +9,17 @@ export type SessionUser = {
   city: string | null;
   occupation: string | null;
   goals: string | null;
+  school: string | null;
+  grade: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  guardianEmail: string | null;
+  secondGuardianName: string | null;
+  secondGuardianPhone: string | null;
+  secondGuardianEmail: string | null;
+  consentPhoto: boolean;
+  consentParticipation: boolean;
+  consentData: boolean;
   avatarUrl: string | null;
   role: "SUPER_ADMIN" | "USER";
   status: string;
@@ -49,7 +60,27 @@ export type MemberRow = {
   status: string;
   joinedAt: string;
   endedAt: string | null;
-  user: { id: string; name: string; email: string; phone?: string | null; city?: string | null; status?: string; occupation?: string | null };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string | null;
+    city?: string | null;
+    status?: string;
+    occupation?: string | null;
+    dateOfBirth?: string | null;
+    school?: string | null;
+    grade?: string | null;
+    guardianName?: string | null;
+    guardianPhone?: string | null;
+    guardianEmail?: string | null;
+    secondGuardianName?: string | null;
+    secondGuardianPhone?: string | null;
+    secondGuardianEmail?: string | null;
+    consentPhoto?: boolean;
+    consentParticipation?: boolean;
+    consentData?: boolean;
+  };
 };
 
 export type AgendaItem = {

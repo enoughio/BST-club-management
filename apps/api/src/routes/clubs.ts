@@ -5,6 +5,7 @@ import multer from "multer";
 import { z } from "zod";
 import { assertHqOrClubAdmin, assertStaff, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
+import { noticeEmails } from "../lib/child";
 import { addMonths, slugify } from "../lib/dates";
 import { HttpError } from "../lib/errors";
 import { createAuthToken } from "../lib/auth";
@@ -129,7 +130,7 @@ clubsRouter.get(
     if (isSuper || isStaff) {
       const rows = await prisma.membership.findMany({
         where: { clubId: club.id },
-        include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true } } },
+        include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true, dateOfBirth: true, school: true, grade: true, consentPhoto: true, consentParticipation: true, consentData: true } } },
         orderBy: { joinedAt: "asc" },
       });
       members = rows.map((row) => ({
@@ -447,7 +448,7 @@ clubsRouter.get(
     await assertStaff(req, club.id);
     const members = await prisma.membership.findMany({
       where: { clubId: club.id },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true, occupation: true } } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true, occupation: true, dateOfBirth: true, school: true, grade: true, guardianName: true, guardianPhone: true, guardianEmail: true, secondGuardianName: true, secondGuardianPhone: true, secondGuardianEmail: true, consentPhoto: true, consentParticipation: true, consentData: true } } },
       orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
     });
     res.json({
@@ -469,7 +470,7 @@ clubsRouter.get(
     await assertStaff(req, club.id);
     const membership = await prisma.membership.findUnique({
       where: { userId_clubId: { userId: req.params.userId, clubId: club.id } },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, occupation: true, goals: true, status: true, avatarKey: true } } },
+      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, occupation: true, goals: true, status: true, avatarKey: true, dateOfBirth: true, school: true, grade: true, guardianName: true, guardianPhone: true, guardianEmail: true, secondGuardianName: true, secondGuardianPhone: true, secondGuardianEmail: true, consentPhoto: true, consentParticipation: true, consentData: true } } },
     });
     if (!membership) throw new HttpError(404, "Member not found");
     const [offices, invoices, attendance, projects] = await Promise.all([
@@ -509,9 +510,9 @@ clubsRouter.post(
     const body = z.object({ userIds: z.array(z.string()).min(1), message: z.string().min(2).max(2000) }).parse(req.body);
     const members = await prisma.membership.findMany({
       where: { clubId: club.id, userId: { in: body.userIds } },
-      include: { user: { select: { email: true } } },
+      include: { user: { select: { email: true, guardianEmail: true, secondGuardianEmail: true } } },
     });
-    const results = await Promise.all(members.map((row) => sendMemberReminder(row.user.email, club.name, body.message).catch(() => false)));
+    const results = await Promise.all(members.flatMap((row) => noticeEmails(row.user).map((to) => sendMemberReminder(to, club.name, body.message).catch(() => false))));
     res.json({ sent: results.filter(Boolean).length, attempted: members.length });
   }),
 );
@@ -618,6 +619,17 @@ clubsRouter.post(
           city: member.city,
           occupation: member.occupation,
           goals: member.goals,
+          school: member.school,
+          grade: member.grade,
+          guardianName: member.guardianName,
+          guardianPhone: member.guardianPhone,
+          guardianEmail: member.guardianEmail,
+          secondGuardianName: member.secondGuardianName,
+          secondGuardianPhone: member.secondGuardianPhone,
+          secondGuardianEmail: member.secondGuardianEmail,
+          consentPhoto: member.consentPhoto,
+          consentParticipation: member.consentParticipation,
+          consentData: member.consentData,
         },
       },
     });

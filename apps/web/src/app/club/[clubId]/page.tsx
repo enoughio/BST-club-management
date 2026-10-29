@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Textarea } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
+import { nextBirthday } from "@/lib/child";
 import { titleCase, when } from "@/lib/format";
 import { TITLES, type Club, type Meeting, type MemberRow } from "@/lib/types";
 import { Bar, BarChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -60,6 +61,13 @@ export default function ClubHome() {
   const upcoming = meetings.filter((meeting) => ["DRAFT", "FINALIZED"].includes(meeting.status) && new Date(meeting.meetingDate).getTime() >= Date.now() - 86400000);
   const openRoles = TITLES.filter((title) => !officers.some((officer) => officer.title === title));
   const quiet = active.filter((member) => !meetings.some((meeting) => new Date(meeting.meetingDate).getTime() >= Date.now() - 30 * 86400000 && meeting.attendance?.some((row) => row.userId === member.user.id && row.present)));
+  const birthdays = active.flatMap((row) => {
+    if (!row.user.dateOfBirth) return [];
+    const birthday = nextBirthday(row.user.dateOfBirth);
+    if (!birthday || birthday.days > 30) return [];
+    return [{ id: row.membershipId, name: row.user.name, days: birthday.days, date: birthday.date.toISOString() }];
+  }).sort((a, b) => a.days - b.days);
+  const consentGaps = active.filter((row) => row.user.consentPhoto === false || row.user.consentParticipation === false || row.user.consentData === false);
 
   const attendance = useMemo(() => meetings
     .filter((meeting) => meeting.status === "COMPLETED" && new Date(meeting.meetingDate).getTime() >= since)
@@ -111,6 +119,34 @@ export default function ClubHome() {
       {focus === "expiring" && <FilterList title="Memberships expiring soon" rows={expiring.map((row) => `${row.user.name} · anniversary ${when(row.joinedAt)}`)} empty="No memberships renew in the next 15 days." />}
       {focus === "meetings" && <FilterList title="Upcoming meetings" rows={upcoming.map((meeting) => `${meeting.title} · ${when(meeting.meetingDate)}`)} empty="No upcoming meetings." />}
       {focus === "roles" && <FilterList title="Open roles" rows={openRoles.map((title) => titleCase(title))} empty="Every officer seat is filled." />}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <h2 className="font-serif text-xl">Birthdays in the next 30 days</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Active members whose birthday falls in the next 30 days.</p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {birthdays.length === 0 && <li className="text-muted-foreground">No birthdays in the next 30 days.</li>}
+            {birthdays.map((row) => (
+              <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-900">
+                <span className="font-medium">{row.name}</span>
+                <span>{row.days === 0 ? "Today" : `${row.days} day${row.days === 1 ? "" : "s"}`} · {when(row.date)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card className={`p-4 ${consentGaps.length ? "border-red-300" : ""}`}>
+          <h2 className="font-serif text-xl">Consent still missing</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Photos, participation, or data-handling consent is not on file.</p>
+          <ul className="mt-3 flex flex-col gap-2 text-sm">
+            {consentGaps.length === 0 && <li className="text-muted-foreground">Every active member has consent on file.</li>}
+            {consentGaps.map((row) => {
+              const missing = [row.user.consentPhoto === false && "photos", row.user.consentParticipation === false && "participation", row.user.consentData === false && "data handling"].filter(Boolean).join(", ");
+              return <li key={row.membershipId} className="text-red-900">{row.user.name} · {missing}</li>;
+            })}
+          </ul>
+          {consentGaps.length > 0 && <Button className="mt-3" variant="outline" asChild><Link href={`/club/${clubId}/members`}>Open the roll</Link></Button>}
+        </Card>
+      </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Block title="Attendance trend" open={expanded === "attendance"} onToggle={() => setExpanded(expanded === "attendance" ? null : "attendance")} summary={narrow ? `${attendance.at(-1)?.rate ?? 0}% at the latest completed meeting` : undefined}>

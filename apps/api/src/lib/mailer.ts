@@ -33,8 +33,24 @@ function page(title: string, body: string) {
 
 export async function sendApplicationLink(to: string, clubName: string, url: string, kind: string) {
   const action = kind === "REINSTATE" ? "reinstate your membership" : "join";
-  const text = `You are invited to ${action} ${clubName}. Open this page, complete the form, and pay the fee: ${url}`;
-  await sendMail(to, `${clubName} membership`, text, page(clubName, `<p>${text}</p><p><a href="${url}">Open the membership page</a></p>`));
+  const text = `You are invited to ${action} ${clubName}. The form asks for the child's full name and date of birth, school and grade, and both parents' or guardians' names, mobile numbers, and email addresses, plus consent for photos, participation, and data handling. Open this page, complete the form, and pay the fee: ${url}`;
+  await sendMail(
+    to,
+    `${clubName} membership`,
+    text,
+    page(
+      clubName,
+      `<p>You are invited to ${action} ${clubName}.</p>
+       <p>The registration form asks for:</p>
+       <ul>
+         <li>The child's full name and date of birth</li>
+         <li>School and grade</li>
+         <li>Both parents' or guardians' names, mobile numbers, and email addresses</li>
+         <li>Consent for photos, participation, and data handling</li>
+       </ul>
+       <p><a href="${url}">Open the membership form</a></p>`,
+    ),
+  );
 }
 
 export async function sendSetPassword(to: string, name: string, url: string) {

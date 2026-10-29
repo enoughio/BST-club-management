@@ -8,6 +8,7 @@ import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
 import { sendSetPassword } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
+import { childProfileData } from "../lib/child";
 import { sessionFor, userCore } from "../lib/serialize";
 import { putObject } from "../lib/storage";
 
@@ -23,6 +24,17 @@ const profileFields = {
   city: z.string().max(80).optional().nullable(),
   occupation: z.string().max(120).optional().nullable(),
   goals: z.string().max(1000).optional().nullable(),
+  school: z.string().max(160).optional().nullable(),
+  grade: z.string().max(40).optional().nullable(),
+  guardianName: z.string().max(120).optional().nullable(),
+  guardianPhone: z.string().max(40).optional().nullable(),
+  guardianEmail: z.string().email().optional().nullable().or(z.literal("")),
+  secondGuardianName: z.string().max(120).optional().nullable(),
+  secondGuardianPhone: z.string().max(40).optional().nullable(),
+  secondGuardianEmail: z.string().email().optional().nullable().or(z.literal("")),
+  consentPhoto: z.boolean().optional(),
+  consentParticipation: z.boolean().optional(),
+  consentData: z.boolean().optional(),
 };
 
 usersRouter.get(
@@ -92,6 +104,7 @@ usersRouter.post(
         occupation: body.occupation || null,
         goals: body.goals || null,
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
+        ...childProfileData(body),
       };
       if (!user) {
         user = await tx.user.create({ data: { email, ...data, role: "USER", status: "INVITED" } });
@@ -101,7 +114,7 @@ usersRouter.post(
       }
       await tx.membership.upsert({
         where: { userId_clubId: { userId: user.id, clubId: club.id } },
-        create: { userId: user.id, clubId: club.id, status: "ACTIVE", joinedAt: new Date(body.paymentDate) },
+        create: { userId: user.id, clubId: club.id, status: "ACTIVE", joinedAt: new Date(body.paymentDate), gradeAtJoin: data.grade },
         update: { status: "ACTIVE", endedAt: null },
       });
       const invoice = await tx.duesInvoice.create({
@@ -157,6 +170,7 @@ usersRouter.patch(
         goals: body.goals,
         status: body.status,
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : body.dateOfBirth === null ? null : undefined,
+        ...childProfileData(body),
       },
     });
     await writeAudit({ actorId: actor.id, action: "user.update", entityType: "User", entityId: user.id });
@@ -268,6 +282,7 @@ profileRouter.patch(
         occupation: body.occupation,
         goals: body.goals,
         dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : body.dateOfBirth === null ? null : undefined,
+        ...childProfileData(body),
       },
     });
     res.json({ user: await sessionFor(actor.id) });
@@ -304,6 +319,7 @@ profileRouter.get(
         status: row.status,
         joinedAt: row.joinedAt,
         endedAt: row.endedAt,
+        gradeAtJoin: row.gradeAtJoin,
         club: row.club,
       })),
     });
@@ -328,15 +344,16 @@ profileRouter.get(
   asyncHandler(async (req, res) => {
     const user = requireUser(req);
     const memberships = await prisma.membership.findMany({
-      where: { userId: user.id, status: "ACTIVE" },
-      select: { clubId: true },
+      where: { userId: user.id },
+      select: { clubId: true, status: true },
     });
-    const clubIds = memberships.map((row) => row.clubId);
+    const clubIds = [...new Set(memberships.map((row) => row.clubId))];
+    const activeClubIds = [...new Set(memberships.filter((row) => row.status === "ACTIVE").map((row) => row.clubId))];
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const [upcoming, past] = await Promise.all([
       prisma.meeting.findMany({
-        where: { clubId: { in: clubIds }, status: "FINALIZED", meetingDate: { gte: today } },
+        where: { clubId: { in: activeClubIds }, status: "FINALIZED", meetingDate: { gte: today } },
         include: { club: { select: { id: true, name: true } }, rsvps: { where: { userId: user.id } }, agenda: { where: { assigneeId: user.id } } },
         orderBy: { meetingDate: "asc" },
       }),

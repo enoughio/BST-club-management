@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ApiError, api, fileUrl } from "@/lib/api";
+import { ageOn, gradeLabel, nextBirthday } from "@/lib/child";
 import { money, relativeWhen, titleCase, when } from "@/lib/format";
 import type { MemberRow } from "@/lib/types";
 
@@ -126,6 +127,7 @@ export default function ClubMembersPage() {
             <input type="checkbox" className="h-4 w-4" checked={selected.includes(row.user.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, row.user.id] : selected.filter((id) => id !== row.user.id))} aria-label={`Select ${row.user.name}`} />
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openProfile(row.user.id)}>
               <p className="font-medium">{row.user.name}</p>
+              <MemberFacts user={row.user} compact />
               <p className="truncate text-sm text-muted-foreground">{row.user.email}</p>
               <p className="text-sm text-muted-foreground">{row.user.phone?.trim() ? row.user.phone : "—"}</p>
             </button>
@@ -145,6 +147,7 @@ export default function ClubMembersPage() {
       <Sheet open={Boolean(profile)} onOpenChange={(open) => { if (!open) setProfile(null); }} title={profile?.user.name || "Member"}>
         {profile && (
           <div className="flex flex-col gap-4 text-sm">
+            <MemberFacts user={profile.user} />
             <p className="truncate">{profile.user.email}</p>
             <p>{profile.user.phone?.trim() ? profile.user.phone : "—"}</p>
             <p title={relativeWhen(profile.joinedAt)}>Joined {when(profile.joinedAt)}</p>
@@ -170,6 +173,35 @@ export default function ClubMembersPage() {
           </div>
         )}
       </Sheet>
+    </div>
+  );
+}
+
+function MemberFacts({ user, compact = false }: { user: MemberRow["user"]; compact?: boolean }) {
+  const age = user.dateOfBirth ? ageOn(user.dateOfBirth) : null;
+  const birthday = user.dateOfBirth ? nextBirthday(user.dateOfBirth) : null;
+  const school = [gradeLabel(user.grade), user.school].filter(Boolean).join(" · ");
+  const missing = [user.consentPhoto === false && "photos", user.consentParticipation === false && "participation", user.consentData === false && "data"].filter(Boolean);
+  if (compact) {
+    return (
+      <span className="flex flex-wrap items-center gap-1 text-xs">
+        {age != null && <span className="text-muted-foreground">{age} years</span>}
+        {school && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-900">{school}</span>}
+        {birthday && birthday.days <= 30 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-900">Birthday {when(birthday.date.toISOString())}</span>}
+      </span>
+    );
+  }
+  return (
+    <div className="rounded-xl border p-3">
+      <p><span className="text-muted-foreground">Current age. </span>{age != null ? `${age} years` : "Not on file"}</p>
+      <p><span className="text-muted-foreground">Next birthday. </span>{birthday ? when(birthday.date.toISOString()) : "Not on file"}</p>
+      {school && <p className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-blue-900">{school}</p>}
+      <p className="mt-2 font-medium">Guardians</p>
+      <p>{user.guardianName || "First guardian not on file"}{user.guardianPhone ? ` · ${user.guardianPhone}` : ""}</p>
+      <p className="truncate text-muted-foreground">{user.guardianEmail || "No email"}</p>
+      <p className="mt-1">{user.secondGuardianName || "Second guardian not on file"}{user.secondGuardianPhone ? ` · ${user.secondGuardianPhone}` : ""}</p>
+      <p className="truncate text-muted-foreground">{user.secondGuardianEmail || "No email"}</p>
+      <p className={missing.length ? "mt-2 text-red-800" : "mt-2 text-blue-900"}>{missing.length ? `Consent missing: ${missing.join(", ")}` : "Consent on file"}</p>
     </div>
   );
 }
