@@ -1,5 +1,8 @@
+import { randomBytes } from "crypto";
 import { AgendaRole, Prisma } from "@prisma/client";
 import { Router } from "express";
+import multer from "multer";
+import path from "path";
 import { z } from "zod";
 import { assertClubAdmin, assertClubAdminOrPresident, assertHqOrClubAdmin, assertStaff, clubOr404, currentClubAdmin, currentOfficer, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
@@ -11,8 +14,22 @@ import { sendMeetingNotice } from "../lib/mailer";
 import { notifyUsers } from "../lib/notify";
 import { prisma } from "../lib/prisma";
 import { AGENDA_ROLES, roleLabel } from "../lib/serialize";
+import { deleteObject, getObject, putObject } from "../lib/storage";
 
 export const meetingsRouter = Router();
+
+const reportUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const REPORT_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
 
 const SINGLETON: AgendaRole[] = [
   "TIMEKEEPER",
@@ -353,6 +370,75 @@ meetingsRouter.post(
   }),
 );
 
+meetingsRouter.post(
+  "/meetings/:id/reports",
+  reportUpload.single("file"),
+  asyncHandler(async (req, res) => {
+    const meeting = await loadMeeting(req.params.id);
+    const user = requireUser(req);
+    if (meeting.status !== "COMPLETED") throw new HttpError(400, "Reports open after the meeting is completed");
+    if (!req.file) throw new HttpError(400, "Choose a PDF, Word document, or image");
+    const agendaItemId = String(req.body?.agendaItemId || "");
+    const item = meeting.agenda.find((row) => row.id === agendaItemId);
+    if (!item || (item.role !== "SPEECH_EVALUATOR" && item.role !== "CHIEF_EVALUATOR") || item.assigneeId !== user.id) {
+      throw new HttpError(403, "Only the assigned speech evaluator or chief evaluator can upload this report");
+    }
+    const meta = reportFileMeta(req.file);
+    const key = `evaluations/${meeting.id}/${item.id}-${randomBytes(6).toString("hex")}${meta.ext}`;
+    await putObject(key, req.file.buffer, meta.mime);
+    const existing = await prisma.evaluationReport.findUnique({ where: { agendaItemId: item.id } });
+    const fileName = (req.file.originalname || `report${meta.ext}`).replace(/[\r\n"]/g, "").slice(0, 180);
+    const saved = existing
+      ? await prisma.evaluationReport.update({
+          where: { id: existing.id },
+          data: { fileKey: key, fileName, mimeType: meta.mime, authorId: user.id },
+        })
+      : await prisma.evaluationReport.create({
+          data: {
+            meetingId: meeting.id,
+            agendaItemId: item.id,
+            authorId: user.id,
+            fileKey: key,
+            fileName,
+            mimeType: meta.mime,
+          },
+        });
+    if (existing && existing.fileKey !== key) await deleteObject(existing.fileKey).catch(() => undefined);
+    res.status(existing ? 200 : 201).json({
+      report: {
+        agendaItemId: saved.agendaItemId,
+        role: item.role,
+        fileName: saved.fileName,
+        evaluatorName: user.name,
+        speakerName: item.targetUser?.name || null,
+        mine: true,
+        forYou: false,
+      },
+    });
+  }),
+);
+
+meetingsRouter.get(
+  "/meetings/:id/reports/:agendaItemId",
+  asyncHandler(async (req, res) => {
+    const meeting = await loadMeeting(req.params.id);
+    const user = requireUser(req);
+    const item = meeting.agenda.find((row) => row.id === req.params.agendaItemId);
+    if (!item || (item.role !== "SPEECH_EVALUATOR" && item.role !== "CHIEF_EVALUATOR")) throw new HttpError(404, "Report not found");
+    await assertCanReadReport(user, meeting, item);
+    const report = await prisma.evaluationReport.findUnique({ where: { agendaItemId: item.id } });
+    if (!report) throw new HttpError(404, "No report has been uploaded");
+    const object = await getObject(report.fileKey);
+    if (!object) throw new HttpError(404, "File is missing from storage");
+    const fileName = report.fileName.replace(/["\r\n]/g, "") || "report";
+    res.setHeader("Content-Type", report.mimeType || object.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(object.body);
+  }),
+);
+
 const meetingInclude = {
   club: { select: { id: true, name: true } },
   agenda: {
@@ -371,6 +457,29 @@ async function loadMeeting(id: string) {
   const meeting = await prisma.meeting.findUnique({ where: { id }, include: meetingInclude });
   if (!meeting) throw new HttpError(404, "Meeting not found");
   return meeting;
+}
+
+function reportFileMeta(file: Express.Multer.File) {
+  const ext = path.extname(file.originalname || "").toLowerCase();
+  const mime = REPORT_EXT[ext];
+  if (!mime) throw new HttpError(400, "Upload a PDF, Word document, or image");
+  return { ext, mime };
+}
+
+async function assertCanReadReport(
+  user: { id: string; role: string },
+  meeting: { clubId: string; agenda: { role: AgendaRole; assigneeId: string | null }[] },
+  item: { role: AgendaRole; assigneeId: string | null; targetUserId: string | null },
+) {
+  if (item.assigneeId === user.id || user.role === "SUPER_ADMIN") return;
+  const [admin, office] = await Promise.all([
+    currentClubAdmin(user.id, meeting.clubId),
+    currentOfficer(user.id, meeting.clubId),
+  ]);
+  if (admin || office) return;
+  if (item.role === "SPEECH_EVALUATOR" && item.targetUserId === user.id) return;
+  if (item.role === "CHIEF_EVALUATOR" && meeting.agenda.some((row) => row.role === "PREPARED_SPEAKER" && row.assigneeId === user.id)) return;
+  throw new HttpError(403, "You cannot open this report");
 }
 
 async function assertCanViewMeeting(user: { id: string; role: string }, clubId: string) {

@@ -42,7 +42,10 @@ export function createApp() {
 
   app.get(/^\/api\/v1\/files\/(.+)/, async (req, res, next) => {
     try {
-      const key = decodeURIComponent((req.params as unknown as string[])[0] || "");
+      const key = decodeURIComponent((req.params as unknown as string[])[0] || "").replace(/\\/g, "/");
+      if (key.startsWith("evaluations/") || key.includes("/evaluations/")) {
+        throw new HttpError(403, "Open this report from the meeting");
+      }
       if (!key.startsWith("avatars/")) requireUser(req);
       const object = await getObject(key);
       if (!object) throw new HttpError(404, "File not found");

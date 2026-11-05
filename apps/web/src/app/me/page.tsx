@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AttendanceHeatmap, type AttendanceMark } from "@/components/attendance-heatmap";
 import type { CertificateView } from "@/components/certificate-card";
+import { ReportDownload, ReportUpload } from "@/components/evaluation-report";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { api } from "@/lib/api";
-import { when } from "@/lib/format";
-import type { AgendaItem, Meeting } from "@/lib/types";
+import { titleCase, when } from "@/lib/format";
+import { useSession } from "@/lib/session";
+import { officesByClub, type AgendaItem, type Meeting } from "@/lib/types";
 
 type Project = { id: string; title: string; description?: string | null };
 type Level = { id: string; number: number; name: string; unlocked?: boolean; projects: Project[] };
@@ -46,6 +48,7 @@ function shortDate(value?: string | null) {
 }
 
 export default function MemberDashboard() {
+  const { user } = useSession();
   const [levels, setLevels] = useState<Level[]>([]);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [certificates, setCertificates] = useState<CertificateView[]>([]);
@@ -53,13 +56,17 @@ export default function MemberDashboard() {
   const [past, setPast] = useState<MeetingRow[]>([]);
   const [now, setNow] = useState(() => Date.now());
 
+  function loadMeetings() {
+    api<{ upcoming: MeetingRow[]; past?: MeetingRow[]; attended?: MeetingRow[] }>("/me/meetings")
+      .then((data) => { setUpcoming(data.upcoming); setPast(data.past || data.attended || []); })
+      .catch(() => undefined);
+  }
+
   useEffect(() => {
     api<{ levels: Level[]; progress: Progress[]; certificates: CertificateView[] }>("/me/progress")
       .then((data) => { setLevels(data.levels); setProgress(data.progress); setCertificates(data.certificates); })
       .catch(() => undefined);
-    api<{ upcoming: MeetingRow[]; past?: MeetingRow[]; attended?: MeetingRow[] }>("/me/meetings")
-      .then((data) => { setUpcoming(data.upcoming); setPast(data.past || data.attended || []); })
-      .catch(() => undefined);
+    loadMeetings();
   }, []);
 
   useEffect(() => {
@@ -93,6 +100,23 @@ export default function MemberDashboard() {
     late: (meeting.attendance || []).some((row) => row.late),
     roles: (meeting.agenda || []).map((item) => item.role),
   }));
+  const officerClubs = officesByClub(user?.offices || []);
+  const myDuties = [
+    ...upcoming.map((meeting) => ({ meeting, open: false })),
+    ...past.map((meeting) => ({ meeting, open: true })),
+  ].flatMap(({ meeting, open }) =>
+    (meeting.agenda || [])
+      .filter((item) => item.role === "SPEECH_EVALUATOR" || item.role === "CHIEF_EVALUATOR")
+      .map((item) => ({
+        meeting,
+        item,
+        open,
+        report: (meeting.reports || []).find((report) => report.agendaItemId === item.id) || null,
+      })),
+  );
+  const incoming = [...upcoming, ...past].flatMap((meeting) =>
+    (meeting.reports || []).filter((report) => report.forYou && !report.mine).map((report) => ({ meeting, report })),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -100,6 +124,71 @@ export default function MemberDashboard() {
         <h1 className="font-serif text-4xl tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">Your projects, the next meeting, and how far this level has come.</p>
       </div>
+
+      {(officerClubs.length > 0 || myDuties.length > 0 || incoming.length > 0) && (
+        <section className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {officerClubs.length > 0 && (
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="font-medium">Officer duties</h2>
+                <Link href="/me/officer" className="text-xs text-blue-800">Open section</Link>
+              </div>
+              <p className="mb-3 text-sm text-muted-foreground">Your member dashboard stays here. These are the extra tools for the office you hold.</p>
+              <ul className="flex flex-col gap-3">
+                {officerClubs.map((club) => (
+                  <li key={club.clubId}>
+                    <p className="text-sm font-medium">{club.clubName}</p>
+                    <p className="text-xs text-muted-foreground">{club.titles.map((title) => titleCase(title)).join(" · ")}</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" asChild><Link href={`/club/${club.clubId}/officer`}>Meetings</Link></Button>
+                      <Button size="sm" variant="outline" asChild><Link href={`/club/${club.clubId}/officer/members`}>Roster</Link></Button>
+                      <Button size="sm" variant="outline" asChild><Link href={`/club/${club.clubId}/officer/activity`}>Activity</Link></Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+          {(myDuties.length > 0 || incoming.length > 0) && (
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="font-medium">{myDuties.length > 0 ? "Meeting duties" : "Evaluation reports"}</h2>
+                <Link href="/me/meetings" className="text-xs text-blue-800">Meetings</Link>
+              </div>
+              <ul className="flex flex-col gap-4">
+                {myDuties.map(({ meeting, item, open, report }) => (
+                  <li key={item.id} className="border-t border-border pt-3 first:border-0 first:pt-0">
+                    <p className="text-sm font-medium">{titleCase(item.role)} · {meeting.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {when(meeting.meetingDate)}
+                      {item.role === "SPEECH_EVALUATOR" && item.targetUser?.name ? ` · for ${item.targetUser.name}` : ""}
+                      {item.role === "CHIEF_EVALUATOR" ? " · meeting report" : ""}
+                    </p>
+                    {open ? (
+                      <ReportUpload meetingId={meeting.id} agendaItemId={item.id} existingName={report?.fileName} onDone={loadMeetings} />
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">The file upload opens once this meeting is completed.</p>
+                    )}
+                  </li>
+                ))}
+                {incoming.map(({ meeting, report }) => (
+                  <li key={report.agendaItemId}>
+                    <ReportDownload
+                      meetingId={meeting.id}
+                      agendaItemId={report.agendaItemId}
+                      fileName={report.fileName}
+                      title={report.role === "CHIEF_EVALUATOR" ? "Chief evaluator report" : "Speech evaluation report"}
+                      detail={report.role === "CHIEF_EVALUATOR"
+                        ? `${report.evaluatorName} filed a meeting report for ${meeting.title}.`
+                        : `${report.evaluatorName} filed a report on your speech at ${meeting.title}.`}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </section>
+      )}
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard featured href="/me/projects" label="Total projects" value={String(allProjects.length)} hint="On your education path" />

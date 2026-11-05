@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ReportDownload, ReportUpload } from "@/components/evaluation-report";
 import { PageIntro } from "@/components/shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,9 @@ export default function MyMeetingsPage() {
                   <p className="text-sm">{when(meeting.meetingDate)} · {meeting.startTime}–{meeting.endTime}</p>
                   <p className="text-sm text-muted-foreground">{meeting.place}</p>
                   <p className="mt-1 text-sm">{roles.length ? `Your role: ${roles.join(", ")}` : "No assigned role yet"}</p>
+                  {(meeting.agenda || []).some((item) => item.role === "SPEECH_EVALUATOR" || item.role === "CHIEF_EVALUATOR") && (
+                    <p className="mt-1 text-sm text-blue-800">After this meeting is completed, upload your evaluation file from Past meetings.</p>
+                  )}
                 </div>
                 {rsvp && <Badge>{titleCase(rsvp)}</Badge>}
               </div>
@@ -69,19 +73,24 @@ export default function MyMeetingsPage() {
       <h2 className="mb-2 mt-6 font-serif text-2xl">Past</h2>
       {past.length === 0 && <Card className="p-4 text-sm text-muted-foreground">Completed meetings will list the date, whether you were there, and the role you held.</Card>}
       <div className="flex flex-col gap-3">
-        {past.map((meeting) => <PastMeeting key={meeting.id} meeting={meeting} userId={user?.id || ""} />)}
+        {past.map((meeting) => <PastMeeting key={meeting.id} meeting={meeting} userId={user?.id || ""} onChanged={load} />)}
       </div>
     </div>
   );
 }
 
-function PastMeeting({ meeting, userId }: { meeting: Row; userId: string }) {
+function PastMeeting({ meeting, userId, onChanged }: { meeting: Row; userId: string; onChanged: () => void }) {
   const [comments, setComments] = useState("");
   const [score, setScore] = useState("80");
   const record = meeting.attendance?.[0];
   const attendance = !record ? "Absent" : record.late ? "Late" : record.present ? "Present" : "Absent";
   const roles = (meeting.agenda || []).map((item) => `${roleIcon(item.role)} ${titleCase(item.role)}`);
   const evalItem = (meeting.agenda || []).find((item) => item.role === "SPEECH_EVALUATOR" && item.assigneeId === userId);
+  const chiefItem = (meeting.agenda || []).find((item) => item.role === "CHIEF_EVALUATOR" && item.assigneeId === userId);
+  const reports = meeting.reports || [];
+  const evalReport = reports.find((report) => report.agendaItemId === evalItem?.id);
+  const chiefReport = reports.find((report) => report.agendaItemId === chiefItem?.id);
+  const shared = reports.filter((report) => report.agendaItemId !== evalItem?.id && report.agendaItemId !== chiefItem?.id);
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -109,6 +118,28 @@ function PastMeeting({ meeting, userId }: { meeting: Row; userId: string }) {
           </div>
         </form>
       )}
+      {evalItem && <ReportUpload meetingId={meeting.id} agendaItemId={evalItem.id} existingName={evalReport?.fileName} onDone={onChanged} />}
+      {chiefItem && (
+        <div className="mt-3">
+          <p className="text-sm font-medium">Chief evaluator report</p>
+          <p className="text-xs text-muted-foreground">Upload the meeting report. Prepared speakers at this meeting, and club officers, can open it.</p>
+          <ReportUpload meetingId={meeting.id} agendaItemId={chiefItem.id} existingName={chiefReport?.fileName} onDone={onChanged} />
+        </div>
+      )}
+      {shared.map((report) => (
+        <ReportDownload
+          key={report.agendaItemId}
+          meetingId={meeting.id}
+          agendaItemId={report.agendaItemId}
+          fileName={report.fileName}
+          title={report.role === "CHIEF_EVALUATOR" ? "Chief evaluator report" : `Speech report${report.speakerName ? ` for ${report.speakerName}` : ""}`}
+          detail={report.role === "CHIEF_EVALUATOR"
+            ? `${report.evaluatorName} uploaded a meeting report${report.forYou ? " for the prepared speakers." : "."}`
+            : report.forYou
+              ? `${report.evaluatorName} uploaded this report for your speech.`
+              : `${report.evaluatorName} uploaded this speech report${report.speakerName ? ` for ${report.speakerName}` : ""}.`}
+        />
+      ))}
     </Card>
   );
 }

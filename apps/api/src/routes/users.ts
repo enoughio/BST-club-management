@@ -351,10 +351,14 @@ profileRouter.get(
     const activeClubIds = [...new Set(memberships.filter((row) => row.status === "ACTIVE").map((row) => row.clubId))];
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
+    const agendaInclude = {
+      where: { assigneeId: user.id },
+      include: { targetUser: { select: { id: true, name: true } }, project: { select: { id: true, title: true } } },
+    };
     const [upcoming, past] = await Promise.all([
       prisma.meeting.findMany({
         where: { clubId: { in: activeClubIds }, status: "FINALIZED", meetingDate: { gte: today } },
-        include: { club: { select: { id: true, name: true } }, rsvps: { where: { userId: user.id } }, agenda: { where: { assigneeId: user.id } } },
+        include: { club: { select: { id: true, name: true } }, rsvps: { where: { userId: user.id } }, agenda: agendaInclude },
         orderBy: { meetingDate: "asc" },
       }),
       prisma.meeting.findMany({
@@ -362,12 +366,60 @@ profileRouter.get(
         include: {
           club: { select: { id: true, name: true } },
           attendance: { where: { userId: user.id }, select: { present: true, late: true } },
-          agenda: { where: { assigneeId: user.id } },
+          agenda: agendaInclude,
         },
         orderBy: { meetingDate: "desc" },
       }),
     ]);
-    const attended = past.filter((meeting) => meeting.attendance.some((row) => row.present) || meeting.agenda.length > 0);
-    res.json({ upcoming, past, attended });
+    const meetingIds = [...upcoming, ...past].map((meeting) => meeting.id);
+    const [dutyItems, offices, admins] = await Promise.all([
+      meetingIds.length
+        ? prisma.agendaItem.findMany({
+            where: { meetingId: { in: meetingIds }, role: { in: ["SPEECH_EVALUATOR", "CHIEF_EVALUATOR", "PREPARED_SPEAKER"] } },
+            select: {
+              id: true,
+              meetingId: true,
+              role: true,
+              assigneeId: true,
+              targetUserId: true,
+              assignee: { select: { name: true } },
+              targetUser: { select: { name: true } },
+              report: { select: { fileName: true } },
+            },
+          })
+        : Promise.resolve([]),
+      prisma.officerRole.findMany({ where: { userId: user.id, endedAt: null }, select: { clubId: true } }),
+      prisma.clubAdmin.findMany({ where: { userId: user.id, endedAt: null }, select: { clubId: true } }),
+    ]);
+    const staffClubs = new Set([...offices.map((row) => row.clubId), ...admins.map((row) => row.clubId)]);
+    const superAdmin = user.role === "SUPER_ADMIN";
+    function reportsFor(meeting: { id: string; clubId: string }) {
+      const items = dutyItems.filter((item) => item.meetingId === meeting.id);
+      const speakerHere = items.some((item) => item.role === "PREPARED_SPEAKER" && item.assigneeId === user.id);
+      const staff = superAdmin || staffClubs.has(meeting.clubId);
+      return items
+        .filter((item) => (item.role === "SPEECH_EVALUATOR" || item.role === "CHIEF_EVALUATOR") && item.report)
+        .filter((item) => {
+          if (item.assigneeId === user.id) return true;
+          if (staff) return true;
+          if (item.role === "SPEECH_EVALUATOR" && item.targetUserId === user.id) return true;
+          if (item.role === "CHIEF_EVALUATOR" && speakerHere) return true;
+          return false;
+        })
+        .map((item) => ({
+          agendaItemId: item.id,
+          role: item.role,
+          fileName: item.report!.fileName,
+          evaluatorName: item.assignee?.name || "Evaluator",
+          speakerName: item.targetUser?.name || null,
+          mine: item.assigneeId === user.id,
+          forYou: item.role === "SPEECH_EVALUATOR" ? item.targetUserId === user.id : speakerHere,
+        }));
+    }
+    const withReports = <T extends { id: string; clubId: string }>(rows: T[]) => rows.map((meeting) => ({ ...meeting, reports: reportsFor(meeting) }));
+    const upcomingOut = withReports(upcoming);
+    const pastOut = withReports(past);
+    const attended = pastOut.filter((meeting) => meeting.attendance.some((row) => row.present) || meeting.agenda.length > 0);
+    res.json({ upcoming: upcomingOut, past: pastOut, attended });
   }),
 );

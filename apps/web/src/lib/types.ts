@@ -112,6 +112,18 @@ export type Meeting = {
   agenda?: AgendaItem[];
   rsvps?: { id: string; status: string; userId: string; user?: { id: string; name: string } }[];
   attendance?: { id?: string; userId: string; present: boolean; late?: boolean; user?: { id: string; name: string; email?: string } }[];
+  reports?: EvaluationReportLink[];
+};
+
+export type EvaluationReportLink = {
+  agendaItemId: string;
+  role: string;
+  fileName: string;
+  evaluatorName: string;
+  speakerName: string | null;
+  mine: boolean;
+  /** True when this viewer is the prepared speaker the report belongs to. */
+  forYou: boolean;
 };
 
 export const TITLES = [
@@ -139,6 +151,15 @@ export const AGENDA_ROLES = [
 export function homeFor(user: SessionUser) {
   if (user.role === "SUPER_ADMIN") return "/hq";
   if (user.adminClubs[0]) return `/club/${user.adminClubs[0].clubId}`;
-  if (user.offices[0]) return `/club/${user.offices[0].clubId}/officer`;
   return "/me";
+}
+
+export function officesByClub(offices: SessionUser["offices"]) {
+  const clubs = new Map<string, { clubId: string; clubName: string; titles: string[] }>();
+  for (const office of offices) {
+    const row = clubs.get(office.clubId) || { clubId: office.clubId, clubName: office.clubName, titles: [] };
+    row.titles.push(office.title);
+    clubs.set(office.clubId, row);
+  }
+  return [...clubs.values()];
 }

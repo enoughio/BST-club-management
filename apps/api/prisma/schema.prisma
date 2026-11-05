@@ -196,6 +196,7 @@ model User {
   authTokens          AuthToken[]
   meetingsCreated     Meeting[]
   clubNotes           ClubNote[]
+  evaluationReports   EvaluationReport[] @relation("ReportAuthor")
 }
 
 model RefreshToken {
@@ -437,6 +438,7 @@ model Meeting {
   rsvps      Rsvp[]
   attendance Attendance[]
   projects   MemberProject[]
+  reports    EvaluationReport[]
 
   @@index([clubId, meetingDate])
   @@index([clubId, status])
@@ -457,8 +459,26 @@ model AgendaItem {
   project      Project?   @relation(fields: [projectId], references: [id], onDelete: SetNull)
   durationMin  Int?
   notes        String?
+  report       EvaluationReport?
 
   @@index([meetingId, sortOrder])
+}
+
+model EvaluationReport {
+  id           String     @id @default(cuid())
+  meetingId    String
+  meeting      Meeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  agendaItemId String     @unique
+  agendaItem   AgendaItem @relation(fields: [agendaItemId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation("ReportAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  fileKey      String
+  fileName     String
+  mimeType     String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([meetingId])
 }
 
 model Rsvp {
