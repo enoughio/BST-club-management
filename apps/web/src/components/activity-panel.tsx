@@ -14,9 +14,9 @@ type Note = { id: string; title: string; body: string; createdAt: string; recipi
 type Alert = { id: string; tone: "critical" | "warning" | "info"; title: string; href: string };
 
 /**
- * Activity and alerts rail. Loads its own data, scrolls on its own, and talks to the
- * other panels only through the dashboard bus: it reads the shared range, publishes the
- * critical alert count for the mobile bell, and reloads when a page announces a change.
+ * Activity and alerts. Loads its own data and talks to the other panels only through
+ * the dashboard bus: it reads the shared range, publishes the critical alert count
+ * for the header control, and reloads when a page announces a change.
  */
 export function ActivityPanel({ clubId, publishCount = true }: { clubId: string; publishCount?: boolean }) {
   const router = useRouter();

@@ -41,6 +41,7 @@ export function AppFrame({
   primaryCount = 4,
   rail,
   onAlerts,
+  alertsOpen = false,
   nav = "tabs",
   theme,
   children,
@@ -50,6 +51,7 @@ export function AppFrame({
   primaryCount?: number;
   rail?: React.ReactNode;
   onAlerts?: () => void;
+  alertsOpen?: boolean;
   nav?: "tabs" | "drawer";
   theme?: "member";
   children: React.ReactNode;
@@ -96,9 +98,18 @@ export function AppFrame({
           </div>
           <div className="flex items-center gap-2">
             {onAlerts && (
-              <Button variant="outline" size="icon" className="relative lg:hidden" aria-label="Activity and alerts" onClick={onAlerts}>
+              <Button
+                variant={alertsOpen ? "default" : "outline"}
+                size="sm"
+                id="activity-alerts-toggle"
+                className="relative z-40"
+                aria-expanded={alertsOpen}
+                aria-controls="club-activity-alerts"
+                onClick={onAlerts}
+              >
                 <Bell className="h-4 w-4" />
-                {alertCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />}
+                Activity and alerts
+                {alertCount > 0 && <span className="h-2 w-2 rounded-full bg-destructive" aria-hidden />}
               </Button>
             )}
             <Button variant="outline" size="icon" aria-label="Notifications" onClick={() => setNotesOpen(true)}>

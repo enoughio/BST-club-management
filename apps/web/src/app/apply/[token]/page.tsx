@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/shell";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,7 @@ export default function ApplyPage() {
         name: payload.club.name,
         description: "Membership fee",
         prefill: { name: form.name, email: form.email, contact: form.phone },
-        theme: { color: "#1e3a5f" },
+        theme: { color: "#1d4ed8" },
         handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           try {
             await api(`/applications/${token}/verify`, { method: "POST", body: JSON.stringify(response) });
@@ -115,59 +115,170 @@ export default function ApplyPage() {
     }
   }
 
-  if (error) return <main className="mx-auto max-w-lg px-4 py-12">{error}</main>;
-  if (!payload) return <main className="p-8">Loading…</main>;
+  if (error) {
+    return (
+      <main className="member-theme min-h-screen bg-blue-50 px-4 py-12">
+        <div className="mx-auto max-w-lg rounded-2xl border bg-card p-6 shadow-sm">
+          <p className="text-sm font-medium text-red-600">Invitation</p>
+          <h1 className="mt-1 font-serif text-3xl tracking-tight">We could not open this form</h1>
+          <p className="mt-2 text-muted-foreground">{error}</p>
+        </div>
+      </main>
+    );
+  }
+  if (!payload) {
+    return (
+      <main className="member-theme min-h-screen bg-blue-50 px-4 py-12">
+        <p className="mx-auto max-w-lg text-muted-foreground">Loading the form…</p>
+      </main>
+    );
+  }
+
+  const joining = payload.application.kind !== "REINSTATE";
+  const missingConsent = [
+    !form.consentPhoto && "photos",
+    !form.consentParticipation && "participation",
+    !form.consentData && "data handling",
+  ].filter((item): item is string => Boolean(item));
 
   return (
-    <main className="mx-auto max-w-lg px-4 pb-28 pt-8">
-      <p className="text-sm uppercase tracking-widest text-accent">{payload.club.city}</p>
-      <h1 className="mt-1 font-serif text-4xl text-primary">{payload.application.kind === "REINSTATE" ? "Reinstate" : "Join"} {payload.club.name}</h1>
-      <p className="mt-2 text-muted-foreground">The form and the fee are on this page. A successful payment activates the membership immediately.</p>
-      {done ? (
-        <div className="mt-8 rounded-xl border bg-card p-5">
-          <h2 className="font-serif text-2xl">You are in</h2>
-          <p className="mt-2">Your membership at {payload.club.name} is active. If this is a new account, check your email to set a password.</p>
-        </div>
-      ) : (
-        <form className="mt-6 flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void pay(); }}>
-          <Field label="Full name"><Input value={form.name} onChange={(event) => set("name", event.target.value)} required /></Field>
-          <Field label="Email"><Input type="email" value={form.email} readOnly /></Field>
-          <Field label="Phone"><Input value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
-          <Field label="Child's date of birth"><Input type="date" value={form.dateOfBirth} onChange={(event) => set("dateOfBirth", event.target.value)} /></Field>
-          <Field label="School"><Input value={form.school} onChange={(event) => set("school", event.target.value)} /></Field>
-          <Field label="Grade"><Input value={form.grade} onChange={(event) => set("grade", event.target.value)} placeholder="4" /></Field>
-          <Field label="Gender"><Input value={form.gender} onChange={(event) => set("gender", event.target.value)} /></Field>
-          <Field label="Address"><Input value={form.address} onChange={(event) => set("address", event.target.value)} /></Field>
-          <Field label="City"><Input value={form.city} onChange={(event) => set("city", event.target.value)} /></Field>
-          <Field label="Occupation"><Input value={form.occupation} onChange={(event) => set("occupation", event.target.value)} /></Field>
-          <Field label="Goals"><Textarea value={form.goals} onChange={(event) => set("goals", event.target.value)} /></Field>
-          <h2 className="font-serif text-2xl">Parents and guardians</h2>
-          <Field label="Guardian name"><Input value={form.guardianName} onChange={(event) => set("guardianName", event.target.value)} /></Field>
-          <Field label="Guardian mobile"><Input value={form.guardianPhone} onChange={(event) => set("guardianPhone", event.target.value)} /></Field>
-          <Field label="Guardian email"><Input type="email" value={form.guardianEmail} onChange={(event) => set("guardianEmail", event.target.value)} /></Field>
-          <Field label="Second guardian name"><Input value={form.secondGuardianName} onChange={(event) => set("secondGuardianName", event.target.value)} /></Field>
-          <Field label="Second guardian mobile"><Input value={form.secondGuardianPhone} onChange={(event) => set("secondGuardianPhone", event.target.value)} /></Field>
-          <Field label="Second guardian email"><Input type="email" value={form.secondGuardianEmail} onChange={(event) => set("secondGuardianEmail", event.target.value)} /></Field>
-          <h2 className="font-serif text-2xl">Consent</h2>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentPhoto} onChange={(event) => set("consentPhoto", event.target.checked)} /> Photos</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentParticipation} onChange={(event) => set("consentParticipation", event.target.checked)} /> Participation</label>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.consentData} onChange={(event) => set("consentData", event.target.checked)} /> Data handling</label>
-          <div className="rounded-xl border bg-card p-4">
-            <p className="text-sm text-muted-foreground">Membership fee</p>
-            <p className="font-serif text-3xl">{money(payload.club.membershipFeeAmount, payload.club.currency)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {payload.razorpay.configured ? "Razorpay Checkout opens on this page." : "Razorpay keys are not configured on the server yet. The pay action still calls the live order API."}
+    <main className="member-theme min-h-screen bg-blue-50">
+      <div className="mx-auto max-w-lg px-4 pb-32 pt-6 sm:pt-10">
+        <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+          <div className="h-2 bg-blue-700" />
+          <div className="p-5">
+            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-blue-700">
+              <span className="h-2 w-2 rounded-full bg-red-600" />
+              {payload.club.city}
+            </p>
+            <h1 className="mt-2 font-serif text-3xl leading-tight tracking-tight sm:text-4xl">
+              {joining ? `Register your child with ${payload.club.name}` : `Welcome them back to ${payload.club.name}`}
+            </h1>
+            <p className="mt-3 text-muted-foreground">
+              Parents usually fill this in. Share a few details about your child, add both guardians, and confirm the permissions you are happy with. Paying the fee on this page activates the membership.
             </p>
           </div>
-          <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
-            <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
-              <span className="font-medium">{money(payload.club.membershipFeeAmount, payload.club.currency)}</span>
-              <Button type="submit" variant="accent" disabled={paying}>{paying ? "Opening…" : "Pay and activate"}</Button>
+        </div>
+
+        {done ? (
+          <div className="mt-5 overflow-hidden rounded-2xl border bg-card shadow-sm">
+            <div className="h-2 bg-blue-700" />
+            <div className="p-5">
+              <p className="text-sm font-medium text-blue-700">Membership active</p>
+              <h2 className="mt-1 font-serif text-3xl tracking-tight">You are in</h2>
+              <p className="mt-2 text-muted-foreground">Your child&apos;s membership at {payload.club.name} is active. If this is a new account, check your email to set a password.</p>
             </div>
           </div>
-        </form>
-      )}
+        ) : (
+          <form className="mt-5 flex flex-col gap-4" onSubmit={(event) => { event.preventDefault(); void pay(); }}>
+            <Section title="About your child" lede="The name and school details the club will use.">
+              <Field label="Child's full name"><Input value={form.name} onChange={(event) => set("name", event.target.value)} required autoComplete="name" /></Field>
+              <Field label="Child's date of birth"><Input type="date" value={form.dateOfBirth} onChange={(event) => set("dateOfBirth", event.target.value)} /></Field>
+              <Field label="School"><Input value={form.school} onChange={(event) => set("school", event.target.value)} /></Field>
+              <Field label="Grade"><Input value={form.grade} onChange={(event) => set("grade", event.target.value)} placeholder="4" /></Field>
+              <Field label="Gender"><Input value={form.gender} onChange={(event) => set("gender", event.target.value)} /></Field>
+              <Field label="Goals"><Textarea value={form.goals} onChange={(event) => set("goals", event.target.value)} /></Field>
+            </Section>
+
+            <Section title="Family contact" lede="The invitation email is already filled in and stays with this application.">
+              <Field label="Email"><Input type="email" value={form.email} readOnly /></Field>
+              <Field label="Phone"><Input value={form.phone} onChange={(event) => set("phone", event.target.value)} autoComplete="tel" /></Field>
+              <Field label="Address"><Input value={form.address} onChange={(event) => set("address", event.target.value)} autoComplete="street-address" /></Field>
+              <Field label="City"><Input value={form.city} onChange={(event) => set("city", event.target.value)} autoComplete="address-level2" /></Field>
+              <Field label="Occupation"><Input value={form.occupation} onChange={(event) => set("occupation", event.target.value)} /></Field>
+            </Section>
+
+            <Section title="Parents and guardians" lede="Add both adults who look after this child, so the club can reach the right person.">
+              <Field label="Guardian name"><Input value={form.guardianName} onChange={(event) => set("guardianName", event.target.value)} autoComplete="name" /></Field>
+              <Field label="Guardian mobile"><Input value={form.guardianPhone} onChange={(event) => set("guardianPhone", event.target.value)} autoComplete="tel" /></Field>
+              <Field label="Guardian email"><Input type="email" value={form.guardianEmail} onChange={(event) => set("guardianEmail", event.target.value)} autoComplete="email" /></Field>
+              <Field label="Second guardian name"><Input value={form.secondGuardianName} onChange={(event) => set("secondGuardianName", event.target.value)} /></Field>
+              <Field label="Second guardian mobile"><Input value={form.secondGuardianPhone} onChange={(event) => set("secondGuardianPhone", event.target.value)} /></Field>
+              <Field label="Second guardian email"><Input type="email" value={form.secondGuardianEmail} onChange={(event) => set("secondGuardianEmail", event.target.value)} /></Field>
+            </Section>
+
+            <Section title="Permissions" lede="Leave a box open if you are not ready to agree. Open items stay marked in red.">
+              <ConsentBox
+                checked={form.consentPhoto}
+                onChange={(value) => set("consentPhoto", value)}
+                label="Photos"
+                detail="Club photos that include your child."
+              />
+              <ConsentBox
+                checked={form.consentParticipation}
+                onChange={(value) => set("consentParticipation", value)}
+                label="Participation"
+                detail="Taking part in club meetings and activities."
+              />
+              <ConsentBox
+                checked={form.consentData}
+                onChange={(value) => set("consentData", value)}
+                label="Data handling"
+                detail="Storing these details so the club can run the membership."
+              />
+              {missingConsent.length > 0 ? (
+                <p className="text-sm text-red-600">Still open: {missingConsent.join(", ")}.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">All three permissions are confirmed.</p>
+              )}
+            </Section>
+
+            <div className="overflow-hidden rounded-2xl border bg-card p-5 shadow-sm">
+              <div className="mb-3 h-1.5 w-12 rounded-full bg-red-600" />
+              <p className="text-sm text-muted-foreground">Membership fee</p>
+              <p className="font-serif text-3xl text-blue-700">{money(payload.club.membershipFeeAmount, payload.club.currency)}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {payload.razorpay.configured ? "Razorpay Checkout opens on this page." : "Razorpay keys are not configured on the server yet. The pay action still calls the live order API."}
+              </p>
+            </div>
+
+            <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
+              <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+                <span className="font-medium">{money(payload.club.membershipFeeAmount, payload.club.currency)}</span>
+                <Button type="submit" className="bg-blue-700 text-white hover:bg-blue-800" disabled={paying}>{paying ? "Opening…" : "Pay and activate"}</Button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
     </main>
+  );
+}
+
+function Section({ title, lede, children }: { title: string; lede: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border bg-card p-4 shadow-sm sm:p-5">
+      <h2 className="font-serif text-2xl tracking-tight">{title}</h2>
+      <p className="mb-4 mt-1 text-sm text-muted-foreground">{lede}</p>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
+  );
+}
+
+function ConsentBox({
+  checked,
+  onChange,
+  label,
+  detail,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  detail: string;
+}) {
+  return (
+    <label className={`flex items-start gap-3 rounded-xl border px-3 py-3 text-sm ${checked ? "border-border bg-background" : "border-red-200 bg-red-50"}`}>
+      <input
+        type="checkbox"
+        className="mt-0.5 h-5 w-5 shrink-0 accent-blue-700"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        <span className={`font-medium ${checked ? "text-foreground" : "text-red-600"}`}>{label}</span>
+        <span className="mt-0.5 block text-muted-foreground">{detail}</span>
+      </span>
+    </label>
   );
 }
 

@@ -3,7 +3,7 @@
 import { Copy, Eye, Flag, Info, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Field, PageIntro } from "@/components/shell";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { ApiError, api } from "@/lib/api";
+import { ApiError, api, fileUrl } from "@/lib/api";
 import { money, titleCase, when } from "@/lib/format";
 import { TITLES, type Club, type Meeting } from "@/lib/types";
 
@@ -25,6 +25,7 @@ type Pending =
   | { kind: "billing"; fee: number; interval: number }
   | { kind: "status"; status: string }
   | { kind: "admin"; userId: string; name: string }
+  | { kind: "reset" }
   | { kind: "delete" }
   | null;
 
@@ -33,6 +34,32 @@ const memberTone: Record<string, string> = { ACTIVE: "bg-emerald-100 text-emeral
 const meetingTone: Record<string, string> = { DRAFT: "bg-amber-100 text-amber-900", FINALIZED: "bg-sky-100 text-sky-900", COMPLETED: "bg-stone-200 text-stone-700", CANCELLED: "bg-stone-100 text-stone-500" };
 const flagTone: Record<string, string> = { REVIEW: "bg-amber-100 text-amber-900", RISK: "bg-red-100 text-red-900", SUPPORT: "bg-sky-100 text-sky-900", INFO: "bg-muted text-muted-foreground" };
 const PAGE = 10;
+
+type ProfileDraft = { name: string; city: string; address: string; meetingSchedule: string; description: string };
+
+const emptyProfile: ProfileDraft = { name: "", city: "", address: "", meetingSchedule: "", description: "" };
+
+function profileFromClub(club: Club): ProfileDraft {
+  return {
+    name: club.name,
+    city: club.city,
+    address: club.address ?? "",
+    meetingSchedule: club.meetingSchedule ?? "",
+    description: club.description ?? "",
+  };
+}
+
+function isProfileDirty(draft: ProfileDraft, club: Club) {
+  const saved = profileFromClub(club);
+  return (Object.keys(saved) as (keyof ProfileDraft)[]).some((key) => draft[key] !== saved[key]);
+}
+
+function isFeeDirty(fee: string, interval: string, club: Club) {
+  const amountMinor = Math.round(Number(fee) * 100);
+  const months = Number(interval);
+  if (!Number.isFinite(amountMinor) || !Number.isFinite(months)) return false;
+  return amountMinor !== club.membershipFeeAmount || months !== club.electionIntervalMonths;
+}
 
 export default function HqClubPage() {
   const clubId = String(useParams().clubId);
@@ -49,14 +76,18 @@ export default function HqClubPage() {
   const [busy, setBusy] = useState(false);
   const [fee, setFee] = useState("");
   const [interval, setInterval] = useState("");
+  const [profile, setProfile] = useState<ProfileDraft>(emptyProfile);
   const [status, setStatus] = useState("");
   const [adminId, setAdminId] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [noteFlag, setNoteFlag] = useState("INFO");
+  const [focusEdit, setFocusEdit] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   function load() {
     api<{ club: Club }>(`/clubs/${clubId}`).then((data) => {
       setClub(data.club);
+      setProfile(profileFromClub(data.club));
       setFee(String(data.club.membershipFeeAmount / 100));
       setInterval(String(data.club.electionIntervalMonths));
       setStatus(data.club.status);
@@ -69,6 +100,12 @@ export default function HqClubPage() {
     api<{ notes: Note[] }>(`/clubs/${clubId}/notes`).then((data) => setNotes(data.notes)).catch(() => undefined);
   }
   useEffect(load, [clubId]);
+
+  useEffect(() => {
+    if (!focusEdit || tab !== "settings") return;
+    editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setFocusEdit(false);
+  }, [focusEdit, tab]);
 
   const pageRows = useMemo(() => roster.slice(page * PAGE, page * PAGE + PAGE), [page, roster]);
   const upcoming = meetings.filter((meeting) => ["DRAFT", "FINALIZED"].includes(meeting.status) && new Date(meeting.meetingDate).getTime() >= Date.now() - 86400000);
@@ -83,12 +120,16 @@ export default function HqClubPage() {
       if (pending.kind === "billing") {
         await api(`/clubs/${clubId}/billing`, { method: "PATCH", body: JSON.stringify({ membershipFeeAmount: pending.fee, electionIntervalMonths: pending.interval }) });
         toast.success("Fee and election cycle saved");
+        setClub((current) => current ? { ...current, membershipFeeAmount: pending.fee, electionIntervalMonths: pending.interval } : current);
       } else if (pending.kind === "status") {
         await api(`/clubs/${clubId}`, { method: "PATCH", body: JSON.stringify({ status: pending.status }) });
-        toast.success("Club status updated");
+        toast.success(pending.status === "INACTIVE" ? "Club paused" : club.status === "INACTIVE" && pending.status === "ACTIVE" ? "Club reactivated" : "Club status updated");
       } else if (pending.kind === "admin") {
         await api(`/clubs/${clubId}/admin`, { method: "POST", body: JSON.stringify({ userId: pending.userId }) });
         toast.success(`${pending.name} is now the Club Admin`);
+      } else if (pending.kind === "reset") {
+        const result = await api<{ sent: boolean; email: string }>(`/clubs/${clubId}/admin/reset-password`, { method: "POST", body: "{}" });
+        toast.success(result.sent ? `Reset link emailed to ${result.email}` : `Reset link created for ${result.email} (email not configured)`);
       } else if (pending.kind === "delete") {
         await api(`/clubs/${clubId}`, { method: "DELETE" });
         toast.success("Club deleted");
@@ -104,12 +145,23 @@ export default function HqClubPage() {
     }
   }
 
+  const profileChanged = isProfileDirty(profile, club);
+  const feeChanged = isFeeDirty(fee, interval, club);
+  const feeReady = feeChanged && Number(fee) > 0 && Number(interval) >= 1;
+
+  function requestFeeSave() {
+    if (!feeReady) return;
+    setPending({ kind: "billing", fee: Math.round(Number(fee) * 100), interval: Number(interval) });
+  }
+
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    if (!profileChanged) return;
     try {
-      await api(`/clubs/${clubId}`, { method: "PATCH", body: JSON.stringify({ name: form.get("name"), city: form.get("city"), address: form.get("address"), meetingSchedule: form.get("meetingSchedule"), description: form.get("description") }) });
+      const body = { name: profile.name, city: profile.city, address: profile.address, meetingSchedule: profile.meetingSchedule, description: profile.description };
+      await api(`/clubs/${clubId}`, { method: "PATCH", body: JSON.stringify(body) });
       toast.success("Profile saved");
+      setClub((current) => current ? { ...current, ...body } : current);
       load();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Could not save");
@@ -136,20 +188,29 @@ export default function HqClubPage() {
     <div className="flex flex-col gap-6">
       <div>
         <Link href="/hq/clubs" className="text-sm text-primary">← All clubs</Link>
-        <PageIntro
-          title={club.name}
-          lede={`${club.city} · Chartered ${when(club.charterDate)}`}
-          actions={
-            <>
-              <Button variant="outline" asChild title="Open the club dashboard exactly as the Club Admin sees it"><Link href={`/club/${clubId}`}><Eye className="h-4 w-4" /> View as Club Admin</Link></Button>
-              <Button onClick={() => setTab("settings")}>Edit club</Button>
-            </>
-          }
-        />
-        <div className="-mt-3 flex flex-wrap items-center gap-2">
+        <PageIntro title={club.name} lede={`${club.city} · Chartered ${when(club.charterDate)}`} />
+        <div className="flex flex-wrap items-center gap-2">
           <Badge className={statusTone[club.status] || ""}>{titleCase(club.status)}</Badge>
           {latestFlag && <Badge className={flagTone[latestFlag.flag || "INFO"]}><Flag className="mr-1 h-3 w-3" />{titleCase(latestFlag.flag || "")}: {latestFlag.body.slice(0, 60)}{latestFlag.body.length > 60 ? "…" : ""}</Badge>}
         </div>
+      </div>
+
+      <div className="sticky top-16 z-20 -mx-4 flex flex-wrap items-center gap-2 border-b bg-background/95 px-4 py-2 backdrop-blur md:top-0 md:mx-0 md:rounded-xl md:border md:px-3">
+        <Button size="sm" variant="outline" asChild title="Open the club dashboard exactly as the Club Admin sees it"><Link href={`/club/${clubId}`}><Eye className="h-4 w-4" /> View as Club Admin</Link></Button>
+        <Button size="sm" onClick={() => { setTab("settings"); setFocusEdit(true); }}>Edit club</Button>
+        {club.status === "INACTIVE"
+          ? <Button size="sm" variant="outline" onClick={() => setPending({ kind: "status", status: "ACTIVE" })}>Reactivate</Button>
+          : <Button size="sm" variant="destructive" onClick={() => setPending({ kind: "status", status: "INACTIVE" })}>Suspend</Button>}
+        <Button size="sm" variant="outline" disabled={!club.currentAdmin} onClick={() => setPending({ kind: "reset" })}>Reset admin password</Button>
+        <Button size="sm" variant="outline" asChild><a href={fileUrl(`/api/v1/clubs/${clubId}/members/export`)}>Export CSV</a></Button>
+        <Button size="sm" variant="destructive" onClick={() => setPending({ kind: "delete" })}>Delete club</Button>
+        {tab === "settings" && (
+          <>
+            <Button size="sm" type="submit" form="club-profile" disabled={!profileChanged}>Save profile</Button>
+            <Button size="sm" type="button" variant="outline" disabled={!feeReady} onClick={requestFeeSave}>Save fee</Button>
+            <Button size="sm" type="button" variant="outline" disabled={!adminId || adminId === club.currentAdmin?.id} onClick={() => setPending({ kind: "admin", userId: adminId, name: activeMembers.find((row) => row.user.id === adminId)?.user.name || "This member" })}>Appoint admin</Button>
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -209,10 +270,10 @@ export default function HqClubPage() {
         </div>
       </Card>
 
-      <div>
+      <div ref={editorRef} className="scroll-mt-36 md:scroll-mt-24">
         <div className="flex gap-1 border-b">
           {([["members", `Members (${roster.length})`], ["meetings", `Meetings (${meetings.length})`], ["notes", `HQ notes (${notes.length})`], ["settings", "Settings"]] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} type="button" className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === id ? "border-primary font-medium text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} type="button" className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === id ? "border-primary font-medium text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`} onClick={() => { setTab(id); if (id === "settings") setFocusEdit(true); }}>{label}</button>
           ))}
         </div>
 
@@ -311,7 +372,7 @@ export default function HqClubPage() {
               <div className="mt-3 flex flex-col gap-3">
                 <Field label="Membership fee (rupees)"><Input value={fee} inputMode="decimal" onChange={(event) => setFee(event.target.value)} /></Field>
                 <Field label="Election interval (months)"><Input value={interval} inputMode="numeric" onChange={(event) => setInterval(event.target.value)} /></Field>
-                <Button type="button" disabled={!(Number(fee) > 0) || !(Number(interval) >= 1)} onClick={() => setPending({ kind: "billing", fee: Math.round(Number(fee) * 100), interval: Number(interval) })}>Review change</Button>
+                <Button type="button" disabled={!feeReady} onClick={requestFeeSave}>Review change</Button>
               </div>
             </Card>
             <Card className="p-4">
@@ -341,14 +402,14 @@ export default function HqClubPage() {
                 <Button type="button" disabled={!adminId || adminId === club.currentAdmin?.id} onClick={() => setPending({ kind: "admin", userId: adminId, name: activeMembers.find((row) => row.user.id === adminId)?.user.name || "This member" })}>Review change</Button>
               </div>
             </Card>
-            <form className="flex flex-col gap-3 rounded-xl border bg-card p-4" onSubmit={saveProfile}>
+            <form id="club-profile" className="flex flex-col gap-3 rounded-xl border bg-card p-4" onSubmit={saveProfile}>
               <h3 className="font-serif text-xl">Profile</h3>
-              <Field label="Name"><Input name="name" defaultValue={club.name} /></Field>
-              <Field label="City"><Input name="city" defaultValue={club.city} /></Field>
-              <Field label="Address"><Input name="address" defaultValue={club.address || ""} /></Field>
-              <Field label="Meeting schedule"><Input name="meetingSchedule" defaultValue={club.meetingSchedule || ""} /></Field>
-              <Field label="Description"><Textarea name="description" defaultValue={club.description || ""} /></Field>
-              <Button type="submit" variant="outline">Save profile</Button>
+              <Field label="Name"><Input name="name" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></Field>
+              <Field label="City"><Input name="city" value={profile.city} onChange={(event) => setProfile({ ...profile, city: event.target.value })} /></Field>
+              <Field label="Address"><Input name="address" value={profile.address} onChange={(event) => setProfile({ ...profile, address: event.target.value })} /></Field>
+              <Field label="Meeting schedule"><Input name="meetingSchedule" value={profile.meetingSchedule} onChange={(event) => setProfile({ ...profile, meetingSchedule: event.target.value })} /></Field>
+              <Field label="Description"><Textarea name="description" value={profile.description} onChange={(event) => setProfile({ ...profile, description: event.target.value })} /></Field>
+              <Button type="submit" variant="outline" disabled={!profileChanged}>Save profile</Button>
             </form>
             <Card className="border-red-200 p-4 lg:col-span-2">
               <h3 className="font-serif text-xl text-destructive">Delete club</h3>
@@ -363,7 +424,7 @@ export default function HqClubPage() {
         open={Boolean(pending)}
         onOpenChange={(next) => { if (!next) setPending(null); }}
         pending={busy}
-        destructive={pending?.kind === "delete"}
+        destructive={pending?.kind === "delete" || (pending?.kind === "status" && pending.status === "INACTIVE")}
         title={pendingCopy.title}
         description={pendingCopy.description}
         confirmLabel={pendingCopy.confirm}
@@ -376,8 +437,11 @@ export default function HqClubPage() {
 function describePending(pending: Pending, club: Club) {
   if (!pending) return { title: "", description: "", confirm: "" };
   if (pending.kind === "billing") return { title: "Change fee and election cycle?", description: `Fee ${money(club.membershipFeeAmount, club.currency)} → ${money(pending.fee, club.currency)}; election every ${club.electionIntervalMonths} → ${pending.interval} months. The next election date is recalculated. Recorded in the audit log.`, confirm: "Save" };
-  if (pending.kind === "status") return { title: `Mark ${club.name} as ${titleCase(pending.status)}?`, description: pending.status === "INACTIVE" ? "The club is shown as paused across headquarters. Members keep their accounts. Recorded in the audit log." : "Recorded in the audit log.", confirm: "Change status" };
+  if (pending.kind === "status" && pending.status === "INACTIVE") return { title: `Suspend ${club.name}?`, description: "The club is marked Inactive and shown as paused. Members keep their accounts; nobody is emailed. This change is recorded in the audit log.", confirm: "Suspend" };
+  if (pending.kind === "status" && pending.status === "ACTIVE" && club.status === "INACTIVE") return { title: `Reactivate ${club.name}?`, description: "The club returns to Active status. This change is recorded in the audit log.", confirm: "Reactivate" };
+  if (pending.kind === "status") return { title: `Mark ${club.name} as ${titleCase(pending.status)}?`, description: "Recorded in the audit log.", confirm: "Change status" };
   if (pending.kind === "admin") return { title: `Appoint ${pending.name} as Club Admin?`, description: `${club.currentAdmin ? `${club.currentAdmin.name}'s appointment ends immediately. ` : ""}${pending.name} gets the club dashboard. Recorded in the audit log.`, confirm: "Appoint" };
+  if (pending.kind === "reset") return { title: `Reset the Club Admin password for ${club.name}?`, description: `${club.currentAdmin?.name || "The admin"} receives a one-hour reset link at ${club.currentAdmin?.email || "their email"}. Their current password keeps working until they use it.`, confirm: "Send reset link" };
   return { title: `Delete ${club.name}?`, description: "This cannot be undone. Memberships, meetings, dues, and announcements for this club are removed. Recorded in the audit log.", confirm: "Delete club" };
 }
 

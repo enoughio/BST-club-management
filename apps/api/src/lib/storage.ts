@@ -10,27 +10,60 @@ function localRoot() {
 }
 
 function safeKey(key: string) {
-  const normalized = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, "");
-  if (normalized.includes("..")) {
+  const normalized = path.posix.normalize(key.replace(/\\/g, "/")).replace(/^(\.\.\/)+/, "");
+  if (!normalized || normalized === "." || normalized.startsWith("/") || normalized.includes("..")) {
     throw new Error("Invalid storage key");
   }
   return normalized;
 }
 
+function readEnv(...names: string[]) {
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function storageEndpoint() {
+  const explicit = readEnv("R2_ENDPOINT", "S3_ENDPOINT");
+  if (explicit) return explicit.replace(/\/$/, "");
+  const account = readEnv("R2_ACCOUNT_ID");
+  if (account) return `https://${account}.r2.cloudflarestorage.com`;
+  const published = readEnv("R2_PUBLIC_URL");
+  if (published.includes("r2.cloudflarestorage.com")) return published.replace(/\/$/, "");
+  return undefined;
+}
+
+function usingR2() {
+  return storageEndpoint()?.includes("r2.cloudflarestorage.com") || Boolean(readEnv("R2_ACCESS_KEY_ID"));
+}
+
+function bucketName() {
+  const name = readEnv("R2_BUCKET_NAME", "R2_BUCKET", "S3_BUCKET");
+  if (!name) throw new Error("Object storage bucket is not configured");
+  return name;
+}
+
 function s3() {
+  const endpoint = storageEndpoint();
+  const r2 = usingR2();
   return new S3Client({
-    region: process.env.S3_REGION || "us-east-1",
-    endpoint: process.env.S3_ENDPOINT || undefined,
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
+    region: readEnv("R2_REGION") || (r2 ? "auto" : readEnv("S3_REGION") || "us-east-1"),
+    endpoint,
+    forcePathStyle: r2 ? process.env.R2_FORCE_PATH_STYLE !== "false" : process.env.S3_FORCE_PATH_STYLE !== "false",
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
     credentials: {
-      accessKeyId: process.env.S3_ACCESS_KEY || "",
-      secretAccessKey: process.env.S3_SECRET_KEY || "",
+      accessKeyId: readEnv("R2_ACCESS_KEY_ID", "S3_ACCESS_KEY"),
+      secretAccessKey: readEnv("R2_SECRET_ACCESS_KEY", "S3_SECRET_KEY"),
     },
   });
 }
 
 function useS3() {
-  return process.env.STORAGE_DRIVER === "s3";
+  const driver = (process.env.STORAGE_DRIVER || "local").toLowerCase();
+  return driver === "s3" || driver === "r2";
 }
 
 export async function putObject(key: string, body: Buffer, contentType: string) {
@@ -38,7 +71,7 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
   if (useS3()) {
     await s3().send(
       new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET,
+        Bucket: bucketName(),
         Key: objectKey,
         Body: body,
         ContentType: contentType,
@@ -55,7 +88,7 @@ export async function getObject(key: string): Promise<StoredObject | null> {
   const objectKey = safeKey(key);
   if (useS3()) {
     try {
-      const result = await s3().send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: objectKey }));
+      const result = await s3().send(new GetObjectCommand({ Bucket: bucketName(), Key: objectKey }));
       const bytes = await result.Body?.transformToByteArray();
       if (!bytes) return null;
       return { body: Buffer.from(bytes), contentType: result.ContentType || "application/octet-stream" };
@@ -74,7 +107,7 @@ export async function getObject(key: string): Promise<StoredObject | null> {
 export async function deleteObject(key: string) {
   const objectKey = safeKey(key);
   if (useS3()) {
-    await s3().send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: objectKey }));
+    await s3().send(new DeleteObjectCommand({ Bucket: bucketName(), Key: objectKey }));
     return;
   }
   await fs.rm(path.join(localRoot(), objectKey), { force: true });

@@ -3,11 +3,10 @@
 import { Eye } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityPanel } from "@/components/activity-panel";
 import { DashboardProvider } from "@/components/dashboard-bus";
 import { AppFrame, Guard } from "@/components/shell";
-import { Sheet } from "@/components/ui/sheet";
 import { useSession } from "@/lib/session";
 
 export default function ClubLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +14,14 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   const clubId = String(useParams().clubId);
   const { user } = useSession();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  useEffect(() => {
+    if (!alertsOpen) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setAlertsOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [alertsOpen]);
   if (pathname.includes("/officer")) return <>{children}</>;
   const items = [
     { href: `/club/${clubId}`, label: "Overview" },
@@ -31,7 +38,7 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   return (
     <Guard allow={(me) => me.role === "SUPER_ADMIN" || me.adminClubs.some((club) => club.clubId === clubId)}>
       <DashboardProvider>
-        <AppFrame title="Club" items={items} onAlerts={() => setAlertsOpen(true)} rail={<ActivityPanel clubId={clubId} />}>
+        <AppFrame title="Club" items={items} alertsOpen={alertsOpen} onAlerts={() => setAlertsOpen((open) => !open)}>
           {preview && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
               <span className="flex items-center gap-2"><Eye className="h-4 w-4" /> Viewing as Club Admin (headquarters preview). Changes you make here are real.</span>
@@ -40,9 +47,15 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
           )}
           {children}
         </AppFrame>
-        <Sheet open={alertsOpen} onOpenChange={setAlertsOpen} title="Activity">
-          <ActivityPanel clubId={clubId} publishCount={false} />
-        </Sheet>
+        <aside
+          id="club-activity-alerts"
+          aria-label="Activity and alerts"
+          aria-hidden={!alertsOpen}
+          inert={!alertsOpen}
+          className={alertsOpen ? "fixed bottom-14 right-0 top-16 z-20 w-full max-w-md overflow-auto border-l bg-card shadow-xl md:bottom-0" : "hidden"}
+        >
+          <ActivityPanel clubId={clubId} />
+        </aside>
       </DashboardProvider>
     </Guard>
   );

@@ -1,3 +1,4 @@
+import "./env";
 import cron from "node-cron";
 import { createApp } from "./app";
 import { runElectionMaintenance } from "./lib/elections";
