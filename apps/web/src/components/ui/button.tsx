@@ -27,10 +27,24 @@ const buttonVariants = cva(
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Disables the button, keeps the label, and shows a small spinner. */
+  pending?: boolean;
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, ...props }, ref) => {
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({ className, variant, size, asChild = false, pending = false, disabled, children, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
-  return <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} />;
+  const isDisabled = Boolean(disabled || pending);
+  return (
+    <Comp className={cn(buttonVariants({ variant, size }), className)} ref={ref} {...props} disabled={isDisabled || undefined} aria-busy={pending || undefined}>
+      {pending && !asChild ? (
+        <>
+          <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-current border-r-transparent" aria-hidden="true" />
+          {children}
+        </>
+      ) : (
+        children
+      )}
+    </Comp>
+  );
 });
 Button.displayName = "Button";

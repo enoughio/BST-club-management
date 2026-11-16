@@ -58,14 +58,16 @@ export function curriculumIssues(levels: CurriculumLevel[], requireGuideFile: bo
     if (level.name.trim().length < 2) issues.push({ levelId: level.id, field: "name", message: "Level name is required." });
     level.projects.forEach((project) => {
       if (project.title.trim().length < 2) issues.push({ levelId: level.id, projectId: project.id, field: "title", message: "Project title is required." });
-      if (requireGuideFile && project.materials.length > 0 && !project.materials.some((material) => material.kind === "GUIDE_FILE" && (material.fileKey || material.url))) {
+      if (requireGuideFile && project.materials.length > 0 && !project.materials.some((material) => material.kind === "GUIDE_FILE" && material.fileKey?.trim())) {
         issues.push({ levelId: level.id, projectId: project.id, field: "guide", message: "Add a guide file before this can be published." });
       }
       project.materials.forEach((material) => {
         if (material.title.trim().length < 2) issues.push({ levelId: level.id, projectId: project.id, materialId: material.id, field: "label", message: "Each learning material needs a label." });
         const url = material.url?.trim() || "";
         const fileKey = material.fileKey?.trim() || "";
-        if (!url && !fileKey) issues.push({ levelId: level.id, projectId: project.id, materialId: material.id, field: "source", message: "Add a URL or upload a file." });
+        if (material.kind === "GUIDE_FILE") {
+          if (!fileKey) issues.push({ levelId: level.id, projectId: project.id, materialId: material.id, field: "source", message: url ? "Upload a guide file." : "Upload a guide file." });
+        } else if (!url && !fileKey) issues.push({ levelId: level.id, projectId: project.id, materialId: material.id, field: "source", message: "Add a URL or upload a file." });
         else if (url && !validUrl(url)) issues.push({ levelId: level.id, projectId: project.id, materialId: material.id, field: "source", message: "Use an http or https link." });
       });
     });

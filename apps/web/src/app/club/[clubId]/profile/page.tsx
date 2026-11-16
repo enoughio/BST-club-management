@@ -95,8 +95,11 @@ export default function ClubProfilePage() {
           {nextMeeting && <p className="mt-2 text-sm">Next: {nextMeeting.title} · {when(nextMeeting.meetingDate)} {days !== null && days >= 0 ? `· in ${days} day${days === 1 ? "" : "s"}` : ""}</p>}
           <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
             <div title="Headquarters sets the fee. Club admins cannot change it here.">
-              <dt className="text-muted-foreground">Club fee</dt>
-              <dd className="font-medium">{money(club.membershipFeeAmount, club.currency)}</dd>
+              <dt className="text-muted-foreground">Membership fees</dt>
+              <dd className="font-medium">
+                {money(club.membershipFeeAmount, club.currency)} per year
+                <span className="block text-sm font-normal text-muted-foreground">{club.quarterlyFeeAmount == null ? "Annual membership only" : `${money(club.quarterlyFeeAmount, club.currency)} per quarter`}</span>
+              </dd>
             </div>
             <div title="Headquarters sets how often this club elects officers.">
               <dt className="text-muted-foreground">Election interval</dt>

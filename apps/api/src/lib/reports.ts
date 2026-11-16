@@ -332,6 +332,7 @@ export async function activityFeed(limit = 40) {
     "meeting.cancel": "Meeting cancelled",
     "membership.reinstate_link": "Reinstatement link sent",
     "member.manual_create": "Member profile created by HQ",
+    "membership.transfer": "Member transferred to another club",
     "user.update": "Member profile updated",
     "user.delete": "Account permanently deleted",
     "user.freeze": "Account frozen",
@@ -399,7 +400,17 @@ export async function drilldown(kind: string, range: ReportRange) {
       include: { user: { select: { id: true, name: true, email: true } }, club: { select: { name: true } } },
       orderBy: { joinedAt: "desc" },
     });
-    return rows.map((row) => ({ id: row.id, title: row.user.name, subtitle: `${row.club.name} · ${row.user.email}`, value: `joined ${row.joinedAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`, href: `/members/${row.user.id}` }));
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.user.name,
+      subtitle: `${row.club.name} · ${row.user.email}`,
+      value: `joined ${row.joinedAt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`,
+      href: `/members/${row.user.id}`,
+      joinedAt: row.joinedAt,
+      feePeriod: row.feePeriod,
+      periodEndsAt: row.periodEndsAt,
+      transferredAt: row.transferredAt,
+    }));
   }
   if (kind === "meetings") {
     const rows = await prisma.meeting.findMany({

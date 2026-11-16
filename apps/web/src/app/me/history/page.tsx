@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { ageBracket, ageOn, gradeLabel, roleIcon } from "@/lib/child";
-import { money, titleCase, when } from "@/lib/format";
+import { feePeriodPhrase, money, titleCase, when } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import type { AgendaItem, Meeting } from "@/lib/types";
 
-type Membership = { id: string; status: string; joinedAt: string; endedAt: string | null; gradeAtJoin: string | null; club: { name: string; city: string } };
+type Membership = { id: string; status: string; joinedAt: string; endedAt: string | null; gradeAtJoin: string | null; feePeriod?: string | null; periodEndsAt?: string | null; transferredAt?: string | null; club: { name: string; city: string } };
 type Invoice = { id: string; amount: number; currency: string; status: string; paidAt: string | null; club: { name: string } };
 type ProjectRow = { projectId: string; approved: boolean; score: number | null; approvedAt: string | null; project?: { title: string } };
 type Level = { name: string; number: number; projects: { id: string; title: string }[] };
@@ -49,9 +49,12 @@ export default function HistoryPage() {
         <div className="flex flex-col gap-2">
           {memberships.map((row) => (
             <Card key={row.id} className="p-4">
-              <p className="font-medium">{row.club.name}</p>
-              <p className="text-sm text-muted-foreground">{row.club.city} · {titleCase(row.status)}</p>
-              <p className="text-sm">Joined {when(row.joinedAt)}{row.endedAt ? ` · ended ${when(row.endedAt)}` : ""}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium">{row.club.name}</p>
+                {row.transferredAt && <Badge className="bg-sky-100 text-sky-900">Transferred</Badge>}
+              </div>
+              <p className="text-sm text-muted-foreground">{row.club.city} · {titleCase(row.status)}{row.feePeriod ? ` · ${titleCase(row.feePeriod)} (${feePeriodPhrase(row.feePeriod)})` : ""}</p>
+              <p className="text-sm">{row.transferredAt ? "Original join date" : "Joined"} {when(row.joinedAt)}{row.periodEndsAt ? ` · current period ends ${when(row.periodEndsAt)}` : ""}{row.endedAt ? ` · ended ${when(row.endedAt)}` : ""}</p>
               <AgeGroup joinedAt={row.joinedAt} gradeAtJoin={row.gradeAtJoin} dateOfBirth={user?.dateOfBirth} />
             </Card>
           ))}

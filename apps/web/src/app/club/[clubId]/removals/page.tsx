@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select, Textarea } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
-import { titleCase } from "@/lib/format";
+import { removalRoleWarning, titleCase } from "@/lib/format";
 import type { MemberRow } from "@/lib/types";
 
 type Removal = { id: string; reason: string; status: string; details: string | null; user: { name: string } };
@@ -29,6 +29,11 @@ export default function ClubRemovalsPage() {
   }
   useEffect(load, [clubId]);
 
+  const selected = members.find((member) => member.user.id === userId);
+  const warning = selected
+    ? removalRoleWarning(selected.user.name, "this club", Boolean(selected.isClubAdmin), selected.offices || [])
+    : null;
+
   return (
     <div>
       <PageIntro title="Removals" lede="A request ends one membership after Headquarters approves it." />
@@ -39,6 +44,7 @@ export default function ClubRemovalsPage() {
             {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name}</option>)}
           </Select>
         </Field>
+        {warning && <p className="text-sm font-medium text-red-700">{warning}</p>}
         <Field label="Reason">
           <Select value={reason} onChange={(event) => setReason(event.target.value)}>
             <option value="RESIGNATION">Resignation</option>
@@ -52,7 +58,9 @@ export default function ClubRemovalsPage() {
           api(`/clubs/${clubId}/removals`, { method: "POST", body: JSON.stringify({ userId, reason, details }) })
             .then(() => { toast.success("Request sent"); setConfirm(false); load(); })
             .catch((error: unknown) => toast.error(error instanceof ApiError ? error.message : "Could not request removal"));
-        }} />
+        }}>
+          {warning && <p className="text-sm font-medium text-red-700">{warning}</p>}
+        </ConfirmDialog>
       </form>
       <div className="flex flex-col gap-3">
         {rows.map((row) => <Card key={row.id} className="p-4"><p className="font-medium">{row.user.name}</p><p className="text-sm">{titleCase(row.reason)} · {titleCase(row.status)}</p><p className="text-sm">{row.details}</p></Card>)}

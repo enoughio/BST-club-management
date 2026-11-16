@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { HttpError } from "./errors";
-import { sendSetPassword } from "./mailer";
+import { sendMemberJoinedNote, sendSetPassword } from "./mailer";
 import { createAuthToken } from "./auth";
+import { periodEndsAt } from "./dates";
 import { notifyUser } from "./notify";
 import { blank, childProfileData } from "./child";
 import { prisma } from "./prisma";
@@ -38,7 +39,7 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
   const result = await prisma.$transaction(async (tx) => {
     const existing = await tx.membershipApplication.findUnique({
       where: { id: applicationId },
-      include: { club: true },
+      include: { club: true, createdBy: { select: { name: true, email: true } } },
     });
     if (!existing) throw new HttpError(404, "Application not found");
     if (existing.status === "COMPLETED") {
@@ -98,10 +99,30 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
       user = await tx.user.update({ where: { id: user.id }, data: profile });
     }
 
+    const started = new Date();
+    const endsAt = periodEndsAt(started, existing.feePeriod);
+    const amount = existing.feePeriod === "QUARTERLY" ? existing.club.quarterlyFeeAmount : existing.club.membershipFeeAmount;
+    if (amount == null) throw new HttpError(400, "This club does not offer quarterly membership");
+
     await tx.membership.upsert({
       where: { userId_clubId: { userId: user.id, clubId: existing.clubId } },
-      create: { userId: user.id, clubId: existing.clubId, status: "ACTIVE", joinedAt: new Date(), endedAt: null, gradeAtJoin: blank(form.grade) },
-      update: { status: "ACTIVE", endedAt: null },
+      create: {
+        userId: user.id,
+        clubId: existing.clubId,
+        status: "ACTIVE",
+        joinedAt: started,
+        endedAt: null,
+        gradeAtJoin: blank(form.grade),
+        feePeriod: existing.feePeriod,
+        periodEndsAt: endsAt,
+      },
+      update: {
+        status: "ACTIVE",
+        endedAt: null,
+        feePeriod: existing.feePeriod,
+        periodEndsAt: endsAt,
+        transferredAt: null,
+      },
     });
 
     const duplicateInvoice = await tx.duesInvoice.findFirst({
@@ -113,7 +134,7 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
         data: {
           userId: user.id,
           clubId: existing.clubId,
-          amount: existing.club.membershipFeeAmount,
+          amount,
           currency: existing.club.currency,
           status: "PAID",
           method: "RAZORPAY",
@@ -133,12 +154,39 @@ export async function activatePaidApplication(applicationId: string, payment: Pa
   });
 
   if (!result.already && result.userId && "needsPassword" in result && result.needsPassword) {
-    const token = await createAuthToken(result.userId, "INVITE", 7);
-    const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/accept-invite?token=${token}`;
-    await sendSetPassword(result.email, result.name, url);
+    try {
+      const token = await createAuthToken(result.userId, "INVITE", 7);
+      const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/accept-invite?token=${token}`;
+      await sendSetPassword(result.email, result.name, url);
+    } catch (error) {
+      console.error(error);
+    }
   }
   if (!result.already && result.userId) {
     await notifyUser(result.userId, "Membership active", `Your membership at ${result.application.club.name} is active.`, "/me");
+    try {
+      const invitedBy = result.application.createdBy;
+      const admin = invitedBy
+        ? invitedBy
+        : (
+            await prisma.clubAdmin.findFirst({
+              where: { clubId: result.application.clubId, endedAt: null },
+              orderBy: { appointedAt: "desc" },
+              include: { user: { select: { name: true, email: true } } },
+            })
+          )?.user;
+      if (admin?.email) {
+        await sendMemberJoinedNote({
+          to: admin.email,
+          adminName: admin.name,
+          memberName: result.name,
+          memberEmail: result.email,
+          clubName: result.application.club.name,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    }
   }
   return result;
 }

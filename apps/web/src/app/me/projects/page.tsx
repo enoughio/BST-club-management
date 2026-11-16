@@ -40,6 +40,7 @@ export default function ProjectsPage() {
         progress={progress}
         certificates={certificates}
         memberName={user?.name || "Member"}
+        resourcesHref={(projectId) => `/me/projects/${projectId}`}
         onSelect={(projectId) => {
           api(`/me/projects/${projectId}/select`, { method: "POST", body: "{}" })
             .then(() => { toast.success("You're on this project"); load(); })

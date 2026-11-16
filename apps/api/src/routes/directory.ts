@@ -49,6 +49,7 @@ directoryRouter.get(
         status: true,
         charterDate: true,
         membershipFeeAmount: true,
+        quarterlyFeeAmount: true,
         currency: true,
       },
     });
@@ -74,6 +75,10 @@ directoryRouter.get(
         status: true,
         // Date of birth, school, grade, and guardian contacts stay off the public directory.
         memberships: { include: { club: { select: { id: true, name: true, slug: true } } } },
+        adminAppointments: {
+          where: { endedAt: null },
+          select: { club: { select: { id: true, name: true, slug: true } } },
+        },
       },
     });
     if (!member || member.role === "SUPER_ADMIN") throw new HttpError(404, "Member not found");
@@ -97,6 +102,11 @@ directoryRouter.get(
         clubs: member.memberships
           .filter((row) => row.status === "ACTIVE")
           .map((row) => ({ id: row.club.id, name: row.club.name, slug: row.club.slug })),
+        adminClubs: member.adminAppointments.map((row) => ({
+          id: row.club.id,
+          name: row.club.name,
+          slug: row.club.slug,
+        })),
       },
     });
   }),

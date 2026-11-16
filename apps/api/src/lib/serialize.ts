@@ -1,5 +1,13 @@
-import type { User } from "@prisma/client";
+import type { FeePeriod, User } from "@prisma/client";
 import { prisma } from "./prisma";
+
+export function membershipTenure(row: { feePeriod: FeePeriod; periodEndsAt: Date; transferredAt: Date | null }) {
+  return {
+    feePeriod: row.feePeriod,
+    periodEndsAt: row.periodEndsAt,
+    transferredAt: row.transferredAt,
+  };
+}
 
 const userSelect = {
   id: true,
@@ -90,6 +98,7 @@ export async function sessionFor(userId: string) {
       status: row.status,
       joinedAt: row.joinedAt,
       endedAt: row.endedAt,
+      ...membershipTenure(row),
     })),
     adminClubs: admins.map((row) => ({ clubId: row.clubId, clubName: row.club.name })),
     offices: offices.map((row) => ({ clubId: row.clubId, clubName: row.club.name, title: row.title })),

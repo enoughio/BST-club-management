@@ -35,6 +35,11 @@ enum ApplicationStatus {
   EXPIRED
 }
 
+enum FeePeriod {
+  ANNUAL
+  QUARTERLY
+}
+
 enum MembershipStatus {
   ACTIVE
   LAPSED
@@ -230,6 +235,7 @@ model Club {
   charterDate            DateTime
   status                 ClubStatus @default(ACTIVE)
   membershipFeeAmount    Int
+  quarterlyFeeAmount     Int?
   currency               String     @default("INR")
   electionIntervalMonths Int
   nextElectionAt         DateTime
@@ -271,6 +277,7 @@ model MembershipApplication {
   club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   email           String
   kind            ApplicationKind
+  feePeriod       FeePeriod         @default(ANNUAL)
   formJson        Json?
   token           String            @unique
   status          ApplicationStatus @default(OPEN)
@@ -293,10 +300,13 @@ model Membership {
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   clubId    String
   club      Club             @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  status      MembershipStatus @default(ACTIVE)
-  joinedAt    DateTime         @default(now())
-  endedAt     DateTime?
-  gradeAtJoin String?
+  status        MembershipStatus @default(ACTIVE)
+  joinedAt      DateTime         @default(now())
+  endedAt       DateTime?
+  feePeriod     FeePeriod        @default(ANNUAL)
+  periodEndsAt  DateTime
+  transferredAt DateTime?
+  gradeAtJoin   String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 

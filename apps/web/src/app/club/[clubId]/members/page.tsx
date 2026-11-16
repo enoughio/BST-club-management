@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useBusEvent } from "@/components/dashboard-bus";
+import { MemberRoleBadges } from "@/components/role-badges";
 import { PageIntro } from "@/components/shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,12 +122,13 @@ export default function ClubMembersPage() {
           </button>
         ))}
       </div>
-      <ul className="mt-4 divide-y rounded-xl border bg-card">
+      <ul className="mt-4 divide-y rounded-xl border bg-card md:hidden">
         {visible.map((row) => (
           <li key={row.membershipId} className="flex items-center gap-3 px-3 py-3">
             <input type="checkbox" className="h-4 w-4" checked={selected.includes(row.user.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, row.user.id] : selected.filter((id) => id !== row.user.id))} aria-label={`Select ${row.user.name}`} />
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openProfile(row.user.id)}>
               <p className="font-medium">{row.user.name}</p>
+              <MemberRoleBadges offices={row.offices} isClubAdmin={row.isClubAdmin} />
               <MemberFacts user={row.user} compact />
               <p className="truncate text-sm text-muted-foreground">{row.user.email}</p>
               <p className="text-sm text-muted-foreground">{row.user.phone?.trim() ? row.user.phone : "—"}</p>
@@ -137,6 +139,42 @@ export default function ClubMembersPage() {
           </li>
         ))}
       </ul>
+      <div className="mt-4 hidden overflow-x-auto rounded-xl border bg-card md:block">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="p-3"></th>
+              <th className="p-3">Name</th>
+              <th className="p-3">Email</th>
+              <th className="p-3">Phone</th>
+              <th className="p-3">Joined</th>
+              <th className="p-3">Status</th>
+              <th className="p-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((row) => (
+              <tr key={row.membershipId} className="border-t">
+                <td className="p-3">
+                  <input type="checkbox" className="h-4 w-4" checked={selected.includes(row.user.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, row.user.id] : selected.filter((id) => id !== row.user.id))} aria-label={`Select ${row.user.name}`} />
+                </td>
+                <td className="p-3">
+                  <button type="button" className="text-left" onClick={() => openProfile(row.user.id)}>
+                    <span className="font-medium">{row.user.name}</span>
+                    <MemberRoleBadges offices={row.offices} isClubAdmin={row.isClubAdmin} />
+                    <MemberFacts user={row.user} compact />
+                  </button>
+                </td>
+                <td className="max-w-[16rem] truncate p-3 text-muted-foreground">{row.user.email}</td>
+                <td className="p-3 text-muted-foreground">{row.user.phone?.trim() ? row.user.phone : "—"}</td>
+                <td className="p-3 text-muted-foreground" title={relativeWhen(row.joinedAt)}>{when(row.joinedAt)}</td>
+                <td className="p-3"><span className={`rounded-full px-2 py-1 text-[11px] ${tone[row.status] || tone.LAPSED}`}>{row.status === "EXPIRED" ? "Probationary" : row.status === "ACTIVE" ? "Active" : "Inactive"}</span></td>
+                <td className="p-3"><Button variant="outline" size="sm" onClick={() => openProfile(row.user.id)}>Details</Button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div className="mt-3 flex items-center justify-between text-sm">
         <span>Page {page + 1} of {pages}</span>
         <div className="flex gap-2">

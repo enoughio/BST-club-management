@@ -36,7 +36,7 @@ export default function HqMeetingsPage() {
           <p className="text-sm text-muted-foreground">{titleCase(open.status)} · {open.place}</p>
           {(open.agenda || []).map((item) => (
             <Card key={item.id} className="p-3 text-sm">
-              <p className="font-medium">{titleCase(item.role)} · {item.title}</p>
+              <p className="font-medium">{titleCase(item.role)}</p>
               <p>{item.assignee?.name || "Unassigned"}{item.project ? ` · ${item.project.title}` : ""}</p>
             </Card>
           ))}

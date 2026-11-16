@@ -121,6 +121,7 @@ applicationsRouter.get(
         name: application.club.name,
         city: application.club.city,
         membershipFeeAmount: application.club.membershipFeeAmount,
+        quarterlyFeeAmount: application.club.quarterlyFeeAmount,
         currency: application.club.currency,
       },
       razorpay: { configured: razorpayConfigured(), keyId: razorpayKeyId() },
@@ -133,18 +134,23 @@ applicationsRouter.post(
   asyncHandler(async (req, res) => {
     const application = await loadOpenApplication(req.params.token);
     if (application.status !== "OPEN") throw new HttpError(400, "This application is already finished");
-    const form = formSchema.parse(req.body);
+    const body = formSchema.extend({ feePeriod: z.enum(["ANNUAL", "QUARTERLY"]) }).parse(req.body);
+    const { feePeriod, ...form } = body;
     if (form.email.toLowerCase() !== application.email) {
       throw new HttpError(400, "Email must match the invitation");
     }
-    const order = await createRazorpayOrder(application.club.membershipFeeAmount, application.club.currency, application.id);
+    if (feePeriod === "QUARTERLY" && application.club.quarterlyFeeAmount == null) {
+      throw new HttpError(400, "This club does not offer quarterly membership");
+    }
+    const amount = feePeriod === "QUARTERLY" ? application.club.quarterlyFeeAmount! : application.club.membershipFeeAmount;
+    const order = await createRazorpayOrder(amount, application.club.currency, application.id);
     await prisma.membershipApplication.update({
       where: { id: application.id },
-      data: { formJson: form satisfies ApplicationForm, razorpayOrderId: order.id },
+      data: { formJson: form satisfies ApplicationForm, razorpayOrderId: order.id, feePeriod },
     });
     res.json({
       orderId: order.id,
-      amount: application.club.membershipFeeAmount,
+      amount,
       currency: application.club.currency,
       keyId: razorpayKeyId(),
     });

@@ -20,7 +20,6 @@ import { AGENDA_ROLES, type Meeting, type MemberRow } from "@/lib/types";
 type Slot = {
   key: string;
   role: string;
-  title: string;
   assigneeId: string;
   targetUserId: string;
   projectId: string;
@@ -73,7 +72,6 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
       (meetingData.meeting.agenda || []).map((item) => ({
         key: item.id,
         role: item.role,
-        title: item.title,
         assigneeId: item.assigneeId || "",
         targetUserId: item.targetUserId || "",
         projectId: item.projectId || "",
@@ -137,7 +135,6 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
           agenda: slots.map((slot, index) => ({
             sortOrder: index,
             role: slot.role,
-            title: slot.title || titleCase(slot.role),
             assigneeId: slot.assigneeId || null,
             targetUserId: slot.targetUserId || null,
             projectId: slot.projectId || null,
@@ -202,8 +199,7 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
                 <li key={item.id} className="flex items-start gap-3 rounded-xl border bg-card p-4">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">{index + 1}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">{titleCase(item.role)}</p>
-                    <p className="font-medium">{item.title}</p>
+                    <p className="font-medium">{titleCase(item.role)}</p>
                     <p className="text-sm text-muted-foreground">{item.assignee?.name || "Unassigned"}{item.targetUser ? ` · evaluating ${item.targetUser.name}` : ""}{item.project ? ` · ${item.project.title}` : ""}</p>
                   </div>
                   {item.durationMin && <span className="shrink-0 text-sm text-muted-foreground">{item.durationMin} min</span>}
@@ -254,7 +250,7 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-serif text-2xl">Agenda</h2>
-            <Button type="button" variant="outline" size="sm" onClick={() => { setSlots([...slots, { key: crypto.randomUUID(), role: "MOC", title: "", assigneeId: "", targetUserId: "", projectId: "", durationMin: "3" }]); setDirty(true); }}>Add item</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => { setSlots([...slots, { key: crypto.randomUUID(), role: "MOC", assigneeId: "", targetUserId: "", projectId: "", durationMin: "3" }]); setDirty(true); }}>Add item</Button>
           </div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={slots.map((slot) => slot.key)} strategy={verticalListSortingStrategy}>
@@ -284,9 +280,6 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
                           <option value="">Unassigned</option>
                           {members.map((member) => <option key={member.user.id} value={member.user.id}>{member.user.name}</option>)}
                         </Select>
-                      </label>
-                      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">Title
-                        <Input value={slot.title} placeholder={titleCase(slot.role)} onChange={(event) => update(index, { title: event.target.value })} />
                       </label>
                       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">Time limit (minutes)
                         <Input value={slot.durationMin} type="number" min={1} inputMode="numeric" onChange={(event) => update(index, { durationMin: event.target.value })} />
@@ -348,7 +341,7 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
               {slots.map((slot, index) => (
                 <li key={slot.key} className="flex gap-2">
                   <span className="w-5 shrink-0 text-muted-foreground">{index + 1}.</span>
-                  <span className="min-w-0 flex-1 truncate">{slot.title || titleCase(slot.role)} <span className="text-muted-foreground">· {memberName(slot.assigneeId) || "Unassigned"}</span></span>
+                  <span className="min-w-0 flex-1 truncate">{titleCase(slot.role)} <span className="text-muted-foreground">· {memberName(slot.assigneeId) || "Unassigned"}</span></span>
                   <span className="shrink-0 text-muted-foreground">{slot.durationMin || "—"} min</span>
                 </li>
               ))}

@@ -165,7 +165,7 @@ export default function CurriculumPage() {
       {preview ? (
         <div className="md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-y-contain">
           <p className="mb-3 text-sm text-muted-foreground">This is the member view of the builder. Level 1’s first project is shown in progress. Members will not see it until you publish.</p>
-          <MemberCurriculum levels={levels} simulated showLocks={false} />
+          <MemberCurriculum levels={levels} simulated showLocks={false} resourcesHref={(projectId) => `/hq/curriculum/projects/${projectId}`} />
         </div>
       ) : (
         <div className="flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-y-contain lg:flex-row lg:items-start">
@@ -231,7 +231,7 @@ export default function CurriculumPage() {
                       ...level,
                       projects: level.projects.map((project) => project.id !== projectId ? project : {
                         ...project,
-                        materials: project.materials.map((material) => material.id === materialId ? { ...material, ...uploaded, title: material.title || file.name.replace(/\.[^.]+$/, "") } : material),
+                        materials: project.materials.map((material) => material.id === materialId ? { ...material, ...uploaded, title: material.title || file.name.replace(/\.[^.]+$/, ""), ...(material.kind === "GUIDE_FILE" ? { url: "" } : {}) } : material),
                       }),
                     }));
                     toast.success("File uploaded. Save the project to keep it in the curriculum.");
@@ -329,7 +329,7 @@ function LevelRow({ level, index, selected, open, flagged, onSelect, onOpenProje
         <button type="button" className="cursor-grab rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Drag to reorder level" {...attributes} {...listeners}><GripVertical className="h-4 w-4" /></button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onSelect}>
           <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "" : "-rotate-90"}`} />
-          <span className="truncate text-sm font-medium">Level {index + 1}: {level.name || "Untitled"}</span>
+          <span className="truncate font-serif text-sm">Level {index + 1}: {level.name || "Untitled"}</span>
           {flagged && <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" title="This level has something that blocks publishing" />}
         </button>
       </div>
@@ -445,7 +445,7 @@ function ProjectCard({ project, index, open, onToggle, issues, onChange, onMater
         <button type="button" className="cursor-grab rounded p-1 text-muted-foreground hover:bg-muted" aria-label="Drag to reorder project" {...attributes} {...listeners}><GripVertical className="h-4 w-4" /></button>
         <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={open} onClick={onToggle}>
           <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "" : "-rotate-90"}`} />
-          <span className="truncate text-sm font-medium">Project {index + 1}: {project.title || "Untitled project"}</span>
+          <span className="truncate font-serif text-sm">Project {index + 1}: {project.title || "Untitled project"}</span>
           {issues.length > 0 && <span className="h-2 w-2 shrink-0 rounded-full bg-red-600" title="This project has something that blocks publishing" />}
         </button>
         <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Delete project" onClick={onDelete}><Trash2 className="h-4 w-4" /></button>
@@ -467,7 +467,7 @@ function ProjectCard({ project, index, open, onToggle, issues, onChange, onMater
               <p className="text-sm font-medium">Learning materials</p>
               <Button type="button" variant="outline" size="sm" onClick={() => onMaterials([...project.materials, { id: newId(), title: "", kind: "GUIDE_FILE", url: "", fileKey: null, fileName: null }])}>Add material</Button>
             </div>
-            <p className="text-xs text-muted-foreground">Guide files, videos, books, and articles live in one list. Order is the order members see.</p>
+            <p className="text-xs text-muted-foreground">A guide file is an upload. Videos, books, and articles can be a link or a file. Order is the order members see.</p>
             {materialIssue && <p className="mt-1 text-xs text-red-700">{materialIssue.message}</p>}
             {guideIssue && <p className="mt-1 text-xs text-red-700">{guideIssue.message}</p>}
             <div className="mt-2 flex flex-col gap-2">
@@ -512,17 +512,27 @@ function MaterialRow({ material, issues, onChange, onRemove, onMove, onUpload }:
           <Button type="button" variant="outline" size="sm" onClick={() => onMove(-1)} aria-label="Move material up">↑</Button>
           <Button type="button" variant="outline" size="sm" onClick={() => onMove(1)} aria-label="Move material down">↓</Button>
         </div>
-        <Select value={material.kind} onChange={(event) => onChange({ kind: event.target.value as MaterialKind })} aria-label="Material type" className="sm:w-40">
+        <Select
+          value={material.kind}
+          onChange={(event) => {
+            const kind = event.target.value as MaterialKind;
+            onChange(kind === "GUIDE_FILE" ? { kind, url: "" } : { kind });
+          }}
+          aria-label="Material type"
+          className="sm:w-40"
+        >
           {MATERIAL_KINDS.map((kind) => <option key={kind.id} value={kind.id}>{kind.label}</option>)}
         </Select>
         <Input value={material.title} placeholder="Label" aria-label="Material label" onChange={(event) => onChange({ title: event.target.value })} className={labelIssue ? "border-red-500" : ""} />
         <button type="button" className="self-center rounded p-1 text-muted-foreground hover:text-destructive" aria-label="Remove material" onClick={onRemove}><Trash2 className="h-4 w-4" /></button>
       </div>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <Input value={material.url || ""} placeholder="https://" aria-label="Material URL" onChange={(event) => onChange({ url: event.target.value })} className={sourceIssue ? "border-red-500" : ""} />
+        {material.kind !== "GUIDE_FILE" && (
+          <Input value={material.url || ""} placeholder="https://" aria-label="Material URL" onChange={(event) => onChange({ url: event.target.value })} className={sourceIssue ? "border-red-500" : ""} />
+        )}
         <label className="text-sm text-primary">
           <input type="file" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) onUpload(file); event.target.value = ""; }} />
-          <span className="inline-flex h-11 cursor-pointer items-center rounded-md border px-3">Upload file</span>
+          <span className={`inline-flex h-11 cursor-pointer items-center rounded-md border px-3 ${sourceIssue && material.kind === "GUIDE_FILE" ? "border-red-500" : ""}`}>Upload file</span>
         </label>
       </div>
       {material.fileName && <p className="mt-1 text-xs text-muted-foreground">File: {material.fileName}</p>}

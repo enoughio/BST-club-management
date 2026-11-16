@@ -145,7 +145,7 @@ export async function sendApplicationLink(to: string, clubName: string, url: str
 
 export async function sendSetPassword(to: string, name: string, url: string) {
   const text = `Hello ${name}, set a password for your club portal account: ${url}`;
-  await sendMail(
+  return sendMail(
     to,
     "Set your password",
     text,
@@ -181,17 +181,17 @@ export async function sendMeetingNotice(input: {
   role: string | null;
   cancelled?: boolean;
   reason?: string | null;
-  agenda?: { title: string; role: string; assignee: string | null }[];
+  agenda?: { role: string; assignee: string | null }[];
   url?: string;
 }) {
   const title = input.cancelled ? `Meeting cancelled — ${input.clubName}` : `Meeting agenda — ${input.clubName}`;
   const roleLine = input.role ? `Your role: ${input.role}.` : "You have no assigned role.";
-  const agendaText = (input.agenda || []).map((item, index) => `${index + 1}. ${item.title} (${item.role})${item.assignee ? ` — ${item.assignee}` : ""}`).join("\n");
+  const agendaText = (input.agenda || []).map((item, index) => `${index + 1}. ${item.role}${item.assignee ? ` — ${item.assignee}` : ""}`).join("\n");
   const text = input.cancelled
     ? `The meeting on ${input.when} at ${input.place} has been cancelled.${input.reason ? ` Reason: ${input.reason}.` : ""}`
     : `${input.clubName}\n${input.when}\n${input.place}\n${roleLine}\n\nAgenda\n${agendaText || "Agenda to follow."}\n${input.url ? `\nView the meeting: ${input.url}` : ""}`;
   const agendaHtml = (input.agenda || [])
-    .map((item) => `<li style="margin:0 0 6px;"><strong>${escapeHtml(item.title)}</strong> · ${escapeHtml(item.role)}${item.assignee ? ` · <span style="color:${BRAND_BLUE};">${escapeHtml(item.assignee)}</span>` : ""}</li>`)
+    .map((item) => `<li style="margin:0 0 6px;"><strong>${escapeHtml(item.role)}</strong>${item.assignee ? ` · <span style="color:${BRAND_BLUE};">${escapeHtml(item.assignee)}</span>` : ""}</li>`)
     .join("");
   const html = renderEmail({
     orgName: input.clubName,
@@ -295,6 +295,96 @@ export async function sendElectionOpened(to: string, clubName: string, url: stri
       title: "Election open",
       bodyHtml: `<p style="margin:0;">Nominations are open for the ${escapeHtml(clubName)} executive committee. You have 7 days to stand.</p>`,
       button: { label: "Open nominations", url },
+    }),
+  );
+}
+
+export async function sendNewMemberAdminNote(input: {
+  to: string;
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  clubName: string;
+  askedToSetPassword: boolean;
+}) {
+  const passwordLine = input.askedToSetPassword
+    ? " They have been asked to set a password for the club portal."
+    : " They already have an account and can sign in.";
+  const text = `Hello ${input.adminName}, ${input.memberName} (${input.memberEmail}) has been added to ${input.clubName}.${passwordLine}`;
+  return sendMail(
+    input.to,
+    `New member — ${input.clubName}`,
+    text,
+    renderEmail({
+      orgName: input.clubName,
+      title: "A new member has joined",
+      bodyHtml: `<p style="margin:0;">Hello ${escapeHtml(input.adminName)},</p>
+        <p style="margin:12px 0 0;">${escapeHtml(input.memberName)} (${escapeHtml(input.memberEmail)}) has been added to ${escapeHtml(input.clubName)}.${escapeHtml(passwordLine)}</p>`,
+    }),
+  );
+}
+
+export async function sendMemberJoinedNote(input: {
+  to: string;
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  clubName: string;
+}) {
+  const text = `Hello ${input.adminName}, ${input.memberName} (${input.memberEmail}) completed registration and payment for ${input.clubName}.`;
+  return sendMail(
+    input.to,
+    `Registration complete — ${input.clubName}`,
+    text,
+    renderEmail({
+      orgName: input.clubName,
+      title: "Registration complete",
+      bodyHtml: `<p style="margin:0;">Hello ${escapeHtml(input.adminName)},</p>
+        <p style="margin:12px 0 0;">${escapeHtml(input.memberName)} (${escapeHtml(input.memberEmail)}) completed registration and payment for ${escapeHtml(input.clubName)}.</p>`,
+    }),
+  );
+}
+
+export async function sendMemberLeftNotice(input: {
+  to: string;
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  fromClubName: string;
+  toClubName: string;
+}) {
+  const text = `Hello ${input.adminName}, ${input.memberName} (${input.memberEmail}) has left ${input.fromClubName} and moved to ${input.toClubName}.`;
+  return sendMail(
+    input.to,
+    `Member moved — ${input.fromClubName}`,
+    text,
+    renderEmail({
+      orgName: input.fromClubName,
+      title: "A member has moved",
+      bodyHtml: `<p style="margin:0;">Hello ${escapeHtml(input.adminName)},</p>
+        <p style="margin:12px 0 0;">${escapeHtml(input.memberName)} (${escapeHtml(input.memberEmail)}) has left ${escapeHtml(input.fromClubName)} and moved to ${escapeHtml(input.toClubName)}.</p>`,
+    }),
+  );
+}
+
+export async function sendMemberJoinedFromNotice(input: {
+  to: string;
+  adminName: string;
+  memberName: string;
+  memberEmail: string;
+  fromClubName: string;
+  toClubName: string;
+}) {
+  const text = `Hello ${input.adminName}, ${input.memberName} (${input.memberEmail}) has joined ${input.toClubName} from ${input.fromClubName}.`;
+  return sendMail(
+    input.to,
+    `Member joined — ${input.toClubName}`,
+    text,
+    renderEmail({
+      orgName: input.toClubName,
+      title: "A member has joined",
+      bodyHtml: `<p style="margin:0;">Hello ${escapeHtml(input.adminName)},</p>
+        <p style="margin:12px 0 0;">${escapeHtml(input.memberName)} (${escapeHtml(input.memberEmail)}) has joined ${escapeHtml(input.toClubName)} from ${escapeHtml(input.fromClubName)}.</p>`,
     }),
   );
 }

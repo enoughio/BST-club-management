@@ -113,16 +113,31 @@ authRouter.post(
   }),
 );
 
+function rejectedLink(purpose: "INVITE" | "RESET", alreadyUsed: boolean) {
+  if (purpose === "RESET" && alreadyUsed) {
+    return new HttpError(400, "This link is invalid or already used");
+  }
+  return new HttpError(400, "This link is invalid or expired");
+}
+
 async function consumeToken(token: string, purpose: "INVITE" | "RESET", password: string) {
   const row = await prisma.authToken.findUnique({ where: { tokenHash: hashToken(token) } });
-  if (!row || row.purpose !== purpose || row.usedAt || row.expiresAt < new Date()) {
-    throw new HttpError(400, "This link is invalid or expired");
-  }
-  await prisma.authToken.update({ where: { id: row.id }, data: { usedAt: new Date() } });
-  await prisma.user.update({
-    where: { id: row.userId },
-    data: { passwordHash: await hashPassword(password), status: "ACTIVE" },
+  if (!row || row.purpose !== purpose) throw rejectedLink(purpose, false);
+  if (row.usedAt) throw rejectedLink(purpose, true);
+  if (row.expiresAt < new Date()) throw rejectedLink(purpose, false);
+
+  const passwordHash = await hashPassword(password);
+  return prisma.$transaction(async (tx) => {
+    const claimed = await tx.authToken.updateMany({
+      where: { id: row.id, purpose, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    });
+    if (claimed.count !== 1) throw rejectedLink(purpose, true);
+    await tx.user.update({
+      where: { id: row.userId },
+      data: { passwordHash, status: "ACTIVE" },
+    });
+    await tx.refreshToken.deleteMany({ where: { userId: row.userId } });
+    return row.userId;
   });
-  await prisma.refreshToken.deleteMany({ where: { userId: row.userId } });
-  return row.userId;
 }

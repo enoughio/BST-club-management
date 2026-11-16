@@ -2,6 +2,8 @@ import { PrismaClient, type OfficerTitle } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import fs from "fs/promises";
 import path from "path";
+import { periodEndsAt } from "../src/lib/dates";
+import { roleLabel } from "../src/lib/serialize";
 
 const prisma = new PrismaClient();
 
@@ -101,6 +103,7 @@ async function main() {
         charterDate: new Date("2024-01-15T00:00:00.000Z"),
         status: "ACTIVE",
         membershipFeeAmount: 150000,
+        quarterlyFeeAmount: 40000,
         currency: "INR",
         electionIntervalMonths: 6,
         nextElectionAt: daysFromNow(120),
@@ -133,6 +136,7 @@ async function main() {
         charterDate: new Date("2025-11-01T00:00:00.000Z"),
         status: "PROVISIONAL",
         membershipFeeAmount: 180000,
+        quarterlyFeeAmount: 50000,
         currency: "INR",
         electionIntervalMonths: 6,
         nextElectionAt: daysFromNow(160),
@@ -419,7 +423,15 @@ async function main() {
 
   async function join(person: { id: string }, clubId: string, joinedAt: Date) {
     await prisma.membership.create({
-      data: { userId: person.id, clubId, status: "ACTIVE", joinedAt, gradeAtJoin: gradeAtJoin.get(person.id) ?? null },
+      data: {
+        userId: person.id,
+        clubId,
+        status: "ACTIVE",
+        joinedAt,
+        feePeriod: "ANNUAL",
+        periodEndsAt: periodEndsAt(joinedAt, "ANNUAL"),
+        gradeAtJoin: gradeAtJoin.get(person.id) ?? null,
+      },
     });
   }
 
@@ -514,15 +526,15 @@ async function main() {
         completedAt: daysFromNow(-daysAgo),
       },
     });
-    const roles: { role: "MOC" | "PREPARED_SPEAKER" | "SPEECH_EVALUATOR" | "CHIEF_EVALUATOR" | "TIMEKEEPER" | "LANGUAGE_EVALUATOR" | "FILLER_COUNTER" | "LISTENER"; userId: string; title: string; targetUserId?: string; projectId?: string }[] = [
-      { role: "MOC", userId: aisha.id, title: "Open the meeting" },
-      { role: "PREPARED_SPEAKER", userId: speakerId, title: "Prepared speech", projectId },
-      { role: "SPEECH_EVALUATOR", userId: evaluatorId, title: "Evaluate the speech", targetUserId: speakerId },
-      { role: "CHIEF_EVALUATOR", userId: vikram.id === speakerId || vikram.id === evaluatorId ? sara.id : vikram.id, title: "General evaluation" },
-      { role: "TIMEKEEPER", userId: sara.id === speakerId || sara.id === evaluatorId ? leela.id : sara.id, title: "Keep time" },
-      { role: "LANGUAGE_EVALUATOR", userId: leela.id === speakerId ? imran.id : leela.id, title: "Word of the day" },
-      { role: "FILLER_COUNTER", userId: imran.id === speakerId || imran.id === evaluatorId ? tara.id : imran.id, title: "Count fillers" },
-      { role: "LISTENER", userId: tara.id === speakerId || tara.id === evaluatorId ? rohan.id : tara.id, title: "Listen for the theme" },
+    const roles: { role: "MOC" | "PREPARED_SPEAKER" | "SPEECH_EVALUATOR" | "CHIEF_EVALUATOR" | "TIMEKEEPER" | "LANGUAGE_EVALUATOR" | "FILLER_COUNTER" | "LISTENER"; userId: string; targetUserId?: string; projectId?: string }[] = [
+      { role: "MOC", userId: aisha.id },
+      { role: "PREPARED_SPEAKER", userId: speakerId, projectId },
+      { role: "SPEECH_EVALUATOR", userId: evaluatorId, targetUserId: speakerId },
+      { role: "CHIEF_EVALUATOR", userId: vikram.id === speakerId || vikram.id === evaluatorId ? sara.id : vikram.id },
+      { role: "TIMEKEEPER", userId: sara.id === speakerId || sara.id === evaluatorId ? leela.id : sara.id },
+      { role: "LANGUAGE_EVALUATOR", userId: leela.id === speakerId ? imran.id : leela.id },
+      { role: "FILLER_COUNTER", userId: imran.id === speakerId || imran.id === evaluatorId ? tara.id : imran.id },
+      { role: "LISTENER", userId: tara.id === speakerId || tara.id === evaluatorId ? rohan.id : tara.id },
     ];
     const seen = new Set<string>();
     const uniqueRoles = roles.filter((role) => {
@@ -535,7 +547,7 @@ async function main() {
         meetingId: meeting.id,
         sortOrder: index,
         role: role.role,
-        title: role.title,
+        title: roleLabel(role.role),
         assigneeId: role.userId,
         targetUserId: role.targetUserId,
         projectId: role.projectId,
@@ -589,10 +601,10 @@ async function main() {
   });
   await prisma.agendaItem.createMany({
     data: [
-      { meetingId: upcoming.id, sortOrder: 0, role: "MOC", title: "Open the meeting", assigneeId: aisha.id, durationMin: 3 },
-      { meetingId: upcoming.id, sortOrder: 1, role: "PREPARED_SPEAKER", title: "Prepared speech", assigneeId: rohan.id, projectId: purpose, durationMin: 7 },
-      { meetingId: upcoming.id, sortOrder: 2, role: "SPEECH_EVALUATOR", title: "Evaluate the speech", assigneeId: neha.id, targetUserId: rohan.id, durationMin: 3 },
-      { meetingId: upcoming.id, sortOrder: 3, role: "TIMEKEEPER", title: "Keep time", assigneeId: sara.id, durationMin: 1 },
+      { meetingId: upcoming.id, sortOrder: 0, role: "MOC", title: roleLabel("MOC"), assigneeId: aisha.id, durationMin: 3 },
+      { meetingId: upcoming.id, sortOrder: 1, role: "PREPARED_SPEAKER", title: roleLabel("PREPARED_SPEAKER"), assigneeId: rohan.id, projectId: purpose, durationMin: 7 },
+      { meetingId: upcoming.id, sortOrder: 2, role: "SPEECH_EVALUATOR", title: roleLabel("SPEECH_EVALUATOR"), assigneeId: neha.id, targetUserId: rohan.id, durationMin: 3 },
+      { meetingId: upcoming.id, sortOrder: 3, role: "TIMEKEEPER", title: roleLabel("TIMEKEEPER"), assigneeId: sara.id, durationMin: 1 },
     ],
   });
   await prisma.rsvp.create({ data: { meetingId: upcoming.id, userId: rohan.id, status: "MAYBE" } });

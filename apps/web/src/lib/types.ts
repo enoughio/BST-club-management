@@ -1,3 +1,5 @@
+export type FeePeriod = "ANNUAL" | "QUARTERLY";
+
 export type SessionUser = {
   id: string;
   email: string;
@@ -31,6 +33,9 @@ export type SessionUser = {
     status: string;
     joinedAt: string;
     endedAt: string | null;
+    feePeriod?: FeePeriod | null;
+    periodEndsAt?: string | null;
+    transferredAt?: string | null;
   }[];
   adminClubs: { clubId: string; clubName: string }[];
   offices: { clubId: string; clubName: string; title: string }[];
@@ -46,7 +51,10 @@ export type Club = {
   description?: string | null;
   charterDate: string;
   status: string;
+  /** Annual fee in minor units. */
   membershipFeeAmount: number;
+  /** Quarterly fee in minor units. Null or omitted means annual membership only. */
+  quarterlyFeeAmount?: number | null;
   currency: string;
   electionIntervalMonths: number;
   nextElectionAt: string;
@@ -60,6 +68,13 @@ export type MemberRow = {
   status: string;
   joinedAt: string;
   endedAt: string | null;
+  feePeriod?: FeePeriod | null;
+  periodEndsAt?: string | null;
+  transferredAt?: string | null;
+  /** Current committee titles in this club. */
+  offices?: string[];
+  /** True when this member is the current Club Admin of this club. */
+  isClubAdmin?: boolean;
   user: {
     id: string;
     name: string;

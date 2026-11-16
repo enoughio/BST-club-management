@@ -4,13 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/shell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { ApiError, api } from "@/lib/api";
 import { ageOn, gradeLabel, nextBirthday } from "@/lib/child";
-import { titleCase, when } from "@/lib/format";
+import { removalRoleWarning, titleCase, when } from "@/lib/format";
+import type { FeePeriod } from "@/lib/types";
 
 export type HqMember = {
   id: string;
@@ -36,7 +38,18 @@ export type HqMember = {
   consentPhoto?: boolean;
   consentParticipation?: boolean;
   consentData?: boolean;
-  memberships: { clubId: string; clubName: string; status: string }[];
+  adminClubs?: { clubId: string; clubName: string }[];
+  offices?: { clubId: string; title: string }[];
+  memberships: {
+    clubId: string;
+    clubName: string;
+    status: string;
+    joinedAt?: string | null;
+    endedAt?: string | null;
+    feePeriod?: FeePeriod | null;
+    periodEndsAt?: string | null;
+    transferredAt?: string | null;
+  }[];
 };
 
 type ProfileDraft = {
@@ -120,9 +133,23 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
   const [reason, setReason] = useState("RESIGNATION");
   const [details, setDetails] = useState("");
   const [linkClubId, setLinkClubId] = useState(user.memberships.find((row) => row.status !== "ACTIVE")?.clubId || "");
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [fromClubId, setFromClubId] = useState("");
+  const [toClubId, setToClubId] = useState("");
+  const [clubs, setClubs] = useState<{ id: string; name: string }[]>([]);
 
   const nameMatches = typed.trim() === user.name.trim();
   const former = user.memberships.filter((row) => row.status !== "ACTIVE");
+  const activeMemberships = user.memberships.filter((row) => row.status === "ACTIVE");
+  const removalClub = user.memberships.find((row) => row.clubId === removalClubId);
+  const removalWarning = removalClubId
+    ? removalRoleWarning(
+      user.name,
+      removalClub?.clubName || "this club",
+      (user.adminClubs || []).some((row) => row.clubId === removalClubId),
+      (user.offices || []).filter((row) => row.clubId === removalClubId).map((row) => row.title),
+    )
+    : null;
 
   function closeMenus() {
     setMenu(false);
@@ -137,6 +164,24 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
       close();
       closeMenus();
       setTyped("");
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Request failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function transferMember() {
+    setBusy(true);
+    try {
+      const result = await api<{ fromClubName?: string; toClubName?: string }>(`/users/${user.id}/transfer`, {
+        method: "POST",
+        body: JSON.stringify({ fromClubId, toClubId }),
+      });
+      toast.success(result.fromClubName && result.toClubName ? `${user.name} moved from ${result.fromClubName} to ${result.toClubName}` : `${user.name} moved`);
+      setTransferOpen(false);
+      closeMenus();
       onChanged();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Request failed");
@@ -176,10 +221,35 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
         ) : (
           <div className="flex flex-col gap-2">
             <ChildFacts user={user} />
+            <div className="mb-2 rounded-xl border p-3 text-sm">
+              <p className="font-medium">Clubs</p>
+              {user.memberships.length === 0 && <p className="text-muted-foreground">No club</p>}
+              {user.memberships.map((row) => (
+                <div key={row.clubId} className="mt-2">
+                  <p>{row.clubName} · {titleCase(row.status)}</p>
+                  {row.transferredAt && (
+                    <p className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground">
+                      <Badge className="bg-sky-100 text-sky-900">Transferred</Badge>
+                      <span>Joined {when(row.joinedAt)}</span>
+                      <span>Period ends {when(row.periodEndsAt)}</span>
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
             <Button variant="outline" asChild><Link href={`/members/${user.id}`}>Public directory card</Link></Button>
             <Button variant="outline" onClick={() => setEditing(true)}>Edit profile</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setFreezeOpen(true); }}>Freeze</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setReinstateOpen(true); }}>Reinstate</Button>
+            <Button variant="outline" onClick={() => {
+              setFromClubId(activeMemberships[0]?.clubId || "");
+              setToClubId("");
+              closeMenus();
+              setTransferOpen(true);
+              api<{ clubs: { id: string; name: string }[] }>("/clubs")
+                .then((data) => setClubs(data.clubs))
+                .catch(() => toast.error("Could not load clubs"));
+            }}>Transfer club</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setTyped(""); setRemovalOpen(true); }}>Start removal</Button>
             <Button variant="destructive" onClick={() => { closeMenus(); setTyped(""); setDeleteOpen(true); }}>Delete account</Button>
           </div>
@@ -222,7 +292,7 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
         <Button
           type="button"
           variant="outline"
-          disabled={busy}
+          pending={busy}
           onClick={() => {
             if (!linkClubId) {
               toast.error("Choose a club for the reinstatement link");
@@ -300,6 +370,7 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
             {user.memberships.map((row) => <option key={row.clubId} value={row.clubId}>{row.clubName} ({titleCase(row.status)})</option>)}
           </Select>
         </Field>
+        {removalWarning && <p className="text-sm font-medium text-red-700">{removalWarning}</p>}
         <Field label="Reason">
           <Select value={reason} onChange={(event) => setReason(event.target.value)}>
             <option value="RESIGNATION">Resignation</option>
@@ -323,6 +394,33 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
         onConfirm={() => void run(() => api(`/users/${user.id}`, { method: "DELETE" }), "Account deleted", () => setDeleteOpen(false))}
       >
         <Field label={`Type ${user.name} to confirm`}><Input value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" /></Field>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={transferOpen}
+        onOpenChange={setTransferOpen}
+        title={`Transfer ${user.name}`}
+        description="Move this member to another club. The original join date and the days left in this period stay with them. No new payment is recorded."
+        confirmLabel="Transfer"
+        pending={busy}
+        confirmDisabled={!fromClubId || !toClubId || fromClubId === toClubId}
+        onConfirm={() => void transferMember()}
+      >
+        <Field label="Current club">
+          <Select value={fromClubId} onChange={(event) => {
+            setFromClubId(event.target.value);
+            if (event.target.value === toClubId) setToClubId("");
+          }}>
+            {activeMemberships.length === 0 && <option value="">No active membership</option>}
+            {activeMemberships.map((row) => <option key={row.clubId} value={row.clubId}>{row.clubName}</option>)}
+          </Select>
+        </Field>
+        <Field label="Destination club">
+          <Select value={toClubId} onChange={(event) => setToClubId(event.target.value)}>
+            <option value="">Choose a club</option>
+            {clubs.filter((item) => item.id !== fromClubId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </Select>
+        </Field>
       </ConfirmDialog>
     </>
   );

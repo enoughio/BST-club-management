@@ -6,13 +6,13 @@ import { z } from "zod";
 import { assertHqOrClubAdmin, assertStaff, clubOr404, requireSuperAdmin, requireUser } from "../lib/access";
 import { writeAudit } from "../lib/audit";
 import { noticeEmails } from "../lib/child";
-import { addMonths, slugify } from "../lib/dates";
+import { addMonths, periodEndsAt, slugify } from "../lib/dates";
 import { HttpError } from "../lib/errors";
 import { createAuthToken } from "../lib/auth";
 import { asyncHandler } from "../lib/http";
 import { sendCommitteeChange, sendMemberReminder, sendPasswordReset } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
-import { publicFileUrl, roleLabel, TITLES } from "../lib/serialize";
+import { membershipTenure, publicFileUrl, roleLabel, TITLES } from "../lib/serialize";
 
 export const clubsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -85,6 +85,7 @@ clubsRouter.post(
         charterDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         status: z.enum(["ACTIVE", "INACTIVE", "PROVISIONAL"]).optional(),
         membershipFeeAmount: z.number().int().positive(),
+        quarterlyFeeAmount: z.number().int().positive().nullable().optional(),
         currency: z.string().length(3).optional(),
         electionIntervalMonths: z.number().int().min(1).max(60),
       })
@@ -104,6 +105,7 @@ clubsRouter.post(
         charterDate,
         status: body.status || "ACTIVE",
         membershipFeeAmount: body.membershipFeeAmount,
+        quarterlyFeeAmount: body.quarterlyFeeAmount ?? null,
         currency: (body.currency || "INR").toUpperCase(),
         electionIntervalMonths: body.electionIntervalMonths,
         nextElectionAt: addMonths(charterDate, body.electionIntervalMonths),
@@ -138,6 +140,7 @@ clubsRouter.get(
         status: row.status,
         joinedAt: row.joinedAt,
         endedAt: row.endedAt,
+        ...membershipTenure(row),
         user: row.user,
       }));
     }
@@ -180,6 +183,7 @@ clubsRouter.patch(
     const body = z
       .object({
         membershipFeeAmount: z.number().int().positive().optional(),
+        quarterlyFeeAmount: z.number().int().positive().nullable().optional(),
         currency: z.string().length(3).optional(),
         electionIntervalMonths: z.number().int().min(1).max(60).optional(),
       })
@@ -197,6 +201,7 @@ clubsRouter.patch(
       where: { id: club.id },
       data: {
         membershipFeeAmount: body.membershipFeeAmount,
+        quarterlyFeeAmount: body.quarterlyFeeAmount,
         currency: body.currency?.toUpperCase(),
         electionIntervalMonths: body.electionIntervalMonths,
         nextElectionAt,
@@ -207,7 +212,7 @@ clubsRouter.patch(
       action: "club.billing",
       entityType: "Club",
       entityId: club.id,
-      snapshot: { membershipFeeAmount: updated.membershipFeeAmount, electionIntervalMonths: updated.electionIntervalMonths },
+      snapshot: { membershipFeeAmount: updated.membershipFeeAmount, quarterlyFeeAmount: updated.quarterlyFeeAmount, electionIntervalMonths: updated.electionIntervalMonths },
     });
     res.json({ club: updated });
   }),
@@ -303,6 +308,7 @@ clubsRouter.get(
         status: row.status,
         joinedAt: row.joinedAt,
         endedAt: row.endedAt,
+        ...membershipTenure(row),
         user: row.user,
         offices: officers.filter((officer) => officer.userId === row.userId).map((officer) => officer.title),
         lastAttendanceAt: lastMeeting.get(row.userId) || null,
@@ -446,17 +452,30 @@ clubsRouter.get(
   asyncHandler(async (req, res) => {
     const club = await clubOr404(req.params.id);
     await assertStaff(req, club.id);
-    const members = await prisma.membership.findMany({
-      where: { clubId: club.id },
-      include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true, occupation: true, dateOfBirth: true, school: true, grade: true, guardianName: true, guardianPhone: true, guardianEmail: true, secondGuardianName: true, secondGuardianPhone: true, secondGuardianEmail: true, consentPhoto: true, consentParticipation: true, consentData: true } } },
-      orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
-    });
+    const [members, officers, admin] = await Promise.all([
+      prisma.membership.findMany({
+        where: { clubId: club.id },
+        include: { user: { select: { id: true, name: true, email: true, phone: true, city: true, status: true, occupation: true, dateOfBirth: true, school: true, grade: true, guardianName: true, guardianPhone: true, guardianEmail: true, secondGuardianName: true, secondGuardianPhone: true, secondGuardianEmail: true, consentPhoto: true, consentParticipation: true, consentData: true } } },
+        orderBy: [{ status: "asc" }, { joinedAt: "asc" }],
+      }),
+      prisma.officerRole.findMany({ where: { clubId: club.id, endedAt: null }, select: { userId: true, title: true } }),
+      prisma.clubAdmin.findFirst({ where: { clubId: club.id, endedAt: null }, orderBy: { appointedAt: "desc" }, select: { userId: true } }),
+    ]);
+    const officesByUser = new Map<string, string[]>();
+    for (const officer of officers) {
+      const held = officesByUser.get(officer.userId) || [];
+      held.push(officer.title);
+      officesByUser.set(officer.userId, held);
+    }
     res.json({
       members: members.map((row) => ({
         membershipId: row.id,
         status: row.status,
         joinedAt: row.joinedAt,
         endedAt: row.endedAt,
+        ...membershipTenure(row),
+        offices: officesByUser.get(row.userId) || [],
+        isClubAdmin: admin?.userId === row.userId,
         user: row.user,
       })),
     });
@@ -492,6 +511,8 @@ clubsRouter.get(
         membershipId: membership.id,
         status: membership.status,
         joinedAt: membership.joinedAt,
+        endedAt: membership.endedAt,
+        ...membershipTenure(membership),
         user: membership.user,
         offices: offices.map((row) => row.title),
         invoices,
@@ -535,6 +556,9 @@ clubsRouter.get(
         city: row.user.city || "",
         status: row.status,
         joinedAt: row.joinedAt.toISOString().slice(0, 10),
+        feePeriod: row.feePeriod,
+        periodEndsAt: row.periodEndsAt.toISOString().slice(0, 10),
+        transferredAt: row.transferredAt ? row.transferredAt.toISOString().slice(0, 10) : "",
       })),
       { header: true },
     );
@@ -577,7 +601,7 @@ clubsRouter.post(
       }
       await prisma.membership.upsert({
         where: { userId_clubId: { userId: user.id, clubId: club.id } },
-        create: { userId: user.id, clubId: club.id, status: "ACTIVE" },
+        create: { userId: user.id, clubId: club.id, status: "ACTIVE", feePeriod: "ANNUAL", periodEndsAt: periodEndsAt(new Date(), "ANNUAL") },
         update: { status: "ACTIVE", endedAt: null },
       });
     }

@@ -44,7 +44,6 @@ const SINGLETON: AgendaRole[] = [
 const agendaItemSchema = z.object({
   sortOrder: z.number().int().min(0),
   role: z.enum(AGENDA_ROLES),
-  title: z.string().min(1).max(160),
   assigneeId: z.string().nullable().optional(),
   targetUserId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
@@ -158,7 +157,7 @@ meetingsRouter.patch(
             meetingId: meeting.id,
             sortOrder: item.sortOrder,
             role: item.role,
-            title: item.title,
+            title: roleLabel(item.role),
             assigneeId: item.assigneeId || null,
             targetUserId: item.targetUserId || null,
             projectId: item.projectId || null,
@@ -553,7 +552,7 @@ async function emailMeeting(
   });
   const when = `${meeting.meetingDate.toISOString().slice(0, 10)} ${meeting.startTime}`;
   const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/me/meetings`;
-  const agenda = meeting.agenda.map((item) => ({ title: item.title, role: roleLabel(item.role), assignee: item.assignee?.name || null }));
+  const agenda = meeting.agenda.map((item) => ({ role: roleLabel(item.role), assignee: item.assignee?.name || null }));
   await notifyUsers(
     members.map((member) => member.user.id),
     cancelled ? "Meeting cancelled" : "Meeting finalized",

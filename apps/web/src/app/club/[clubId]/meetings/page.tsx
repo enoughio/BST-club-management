@@ -100,8 +100,7 @@ export default function ClubMeetingsPage() {
             {(selected.agenda || []).length === 0 && <p className="text-muted-foreground">No agenda items yet.</p>}
             {(selected.agenda || []).map((item) => (
               <div key={item.id} className="rounded-lg border p-3">
-                <p className="text-xs uppercase text-muted-foreground">{titleCase(item.role)}</p>
-                <p className="font-medium">{item.title}</p>
+                <p className="font-medium">{titleCase(item.role)}</p>
                 <p>{item.assigneeId ? "Assigned" : "Unassigned"}</p>
               </div>
             ))}

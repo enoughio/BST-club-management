@@ -16,6 +16,7 @@ type PublicClub = {
   status: string;
   charterDate: string;
   membershipFeeAmount: number;
+  quarterlyFeeAmount?: number | null;
   currency: string;
 };
 
@@ -41,7 +42,7 @@ export default function PublicClubPage() {
         <div><dt className="text-muted-foreground">Meets</dt><dd>{club.meetingSchedule || "Schedule to be announced"}</dd></div>
         <div><dt className="text-muted-foreground">Address</dt><dd>{club.address || "—"}</dd></div>
         <div><dt className="text-muted-foreground">Chartered</dt><dd>{when(club.charterDate)}</dd></div>
-        <div><dt className="text-muted-foreground">Membership fee</dt><dd>{money(club.membershipFeeAmount, club.currency)}</dd></div>
+        <div><dt className="text-muted-foreground">Membership fee</dt><dd>{money(club.membershipFeeAmount, club.currency)} per year{club.quarterlyFeeAmount == null ? "" : ` · ${money(club.quarterlyFeeAmount, club.currency)} per quarter`}</dd></div>
       </dl>
       <Button className="mt-8" variant="outline" asChild><Link href="/directory">All clubs</Link></Button>
     </main>

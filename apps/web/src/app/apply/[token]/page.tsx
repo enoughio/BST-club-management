@@ -5,9 +5,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Field } from "@/components/shell";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/input";
+import { Input, Select, Textarea } from "@/components/ui/input";
 import { ApiError, api } from "@/lib/api";
-import { money } from "@/lib/format";
+import { feePeriodPhrase, money } from "@/lib/format";
+import type { FeePeriod } from "@/lib/types";
 
 type FormState = {
   name: string;
@@ -34,7 +35,7 @@ type FormState = {
 
 type Payload = {
   application: { email: string; kind: string; status: string; form: Partial<FormState> | null };
-  club: { name: string; city: string; membershipFeeAmount: number; currency: string };
+  club: { name: string; city: string; membershipFeeAmount: number; quarterlyFeeAmount?: number | null; currency: string };
   razorpay: { configured: boolean; keyId: string };
 };
 
@@ -47,6 +48,7 @@ export default function ApplyPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [paying, setPaying] = useState(false);
+  const [feePeriod, setFeePeriod] = useState<FeePeriod>("ANNUAL");
 
   useEffect(() => {
     api<Payload>(`/applications/${token}`)
@@ -74,6 +76,9 @@ export default function ApplyPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  const offersQuarterly = typeof payload?.club.quarterlyFeeAmount === "number";
+  const selectedPeriod: FeePeriod = offersQuarterly && feePeriod === "QUARTERLY" ? "QUARTERLY" : "ANNUAL";
+
   async function pay() {
     if (!payload) return;
     if (!form.name || !form.email) {
@@ -84,7 +89,7 @@ export default function ApplyPage() {
     try {
       const order = await api<{ orderId: string; amount: number; currency: string; keyId: string }>(`/applications/${token}/order`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, feePeriod: selectedPeriod }),
       });
       await loadRazorpay();
       if (!window.Razorpay) throw new Error("Razorpay Checkout did not load");
@@ -94,7 +99,7 @@ export default function ApplyPage() {
         currency: order.currency,
         order_id: order.orderId,
         name: payload.club.name,
-        description: "Membership fee",
+        description: `Membership fee, ${feePeriodPhrase(selectedPeriod)}`,
         prefill: { name: form.name, email: form.email, contact: form.phone },
         theme: { color: "#1d4ed8" },
         handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
@@ -135,6 +140,8 @@ export default function ApplyPage() {
   }
 
   const joining = payload.application.kind !== "REINSTATE";
+  const charge = selectedPeriod === "QUARTERLY" ? payload.club.quarterlyFeeAmount ?? payload.club.membershipFeeAmount : payload.club.membershipFeeAmount;
+  const chargeLabel = `${money(charge, payload.club.currency)} ${feePeriodPhrase(selectedPeriod)}`;
   const missingConsent = [
     !form.consentPhoto && "photos",
     !form.consentParticipation && "participation",
@@ -226,7 +233,17 @@ export default function ApplyPage() {
             <div className="overflow-hidden rounded-2xl border bg-card p-5 shadow-sm">
               <div className="mb-3 h-1.5 w-12 rounded-full bg-red-600" />
               <p className="text-sm text-muted-foreground">Membership fee</p>
-              <p className="font-serif text-3xl text-blue-700">{money(payload.club.membershipFeeAmount, payload.club.currency)}</p>
+              {offersQuarterly && (
+                <div className="mt-3">
+                  <Field label="Tenure">
+                    <Select value={selectedPeriod} onChange={(event) => setFeePeriod(event.target.value === "QUARTERLY" ? "QUARTERLY" : "ANNUAL")}>
+                      <option value="ANNUAL">Annual</option>
+                      <option value="QUARTERLY">Quarterly</option>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+              <p className="mt-3 font-serif text-3xl text-blue-700">{chargeLabel}</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {payload.razorpay.configured ? "Razorpay Checkout opens on this page." : "Razorpay keys are not configured on the server yet. The pay action still calls the live order API."}
               </p>
@@ -234,8 +251,8 @@ export default function ApplyPage() {
 
             <div className="fixed inset-x-0 bottom-0 border-t bg-background/95 p-4 backdrop-blur">
               <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
-                <span className="font-medium">{money(payload.club.membershipFeeAmount, payload.club.currency)}</span>
-                <Button type="submit" className="bg-blue-700 text-white hover:bg-blue-800" disabled={paying}>{paying ? "Opening…" : "Pay and activate"}</Button>
+                <span className="font-medium">{chargeLabel}</span>
+                <Button type="submit" className="bg-blue-700 text-white hover:bg-blue-800" pending={paying}>Pay and activate</Button>
               </div>
             </div>
           </form>

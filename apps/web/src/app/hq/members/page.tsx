@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MemberActions, type HqMember } from "@/components/member-actions";
 import { PageIntro } from "@/components/shell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 import { ageOn, gradeLabel, nextBirthday } from "@/lib/child";
 import { titleCase, when } from "@/lib/format";
@@ -20,6 +22,7 @@ export default function HqMembersPage() {
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(LIMIT);
   const [users, setUsers] = useState<HqMember[]>([]);
+  const [ready, setReady] = useState(false);
 
   function load() {
     api<{ users: HqMember[]; total: number; page: number; pageSize: number }>(`/users?q=${encodeURIComponent(applied)}&page=${page}&limit=${LIMIT}`)
@@ -28,7 +31,8 @@ export default function HqMembersPage() {
         setTotal(data.total);
         setPageSize(data.pageSize || LIMIT);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setReady(true));
   }
 
   useEffect(load, [applied, page]);
@@ -43,36 +47,46 @@ export default function HqMembersPage() {
         <Button variant="outline" onClick={() => { setPage(1); setApplied(q); }}>Search</Button>
         <Button asChild><Link href="/hq/members/new">New member</Link></Button>
       </div>
-      <p className="mb-3 text-sm text-muted-foreground">{total} members</p>
-      <div className="flex flex-col gap-3 md:hidden">
-        {users.map((user) => <MemberCard key={user.id} user={user} onChanged={load} />)}
-      </div>
-      <div className="hidden overflow-x-auto rounded-xl border md:block">
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="bg-muted"><tr><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Clubs</th><th className="p-3"></th></tr></thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-t">
-                <td className="p-3">
-                  <Link href={`/members/${user.id}`}>{user.name}</Link>
-                  {user.dateOfBirth && <span className="block text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</span>}
-                  <SchoolBadge user={user} />
-                </td>
-                <td className="p-3">{user.email}</td>
-                <td className="p-3">{titleCase(user.status)}</td>
-                <td className="p-3">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</td>
-                <td className="p-3"><MemberActions user={user} onChanged={load} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {users.length === 0 && <p className="mt-4 text-sm text-muted-foreground">No members on this page.</p>}
-      <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <Button variant="outline" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button>
-        <p className="text-center text-sm">Page {page} of {pages}</p>
-        <Button variant="outline" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>Next</Button>
-      </div>
+      {ready ? <p className="mb-3 text-sm text-muted-foreground">{total} members</p> : <Skeleton className="mb-3 h-4 w-24" />}
+      {!ready && (
+        <div className="flex flex-col gap-3" aria-busy="true">
+          {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-16 w-full" />)}
+        </div>
+      )}
+      {ready && (
+        <>
+          <div className="flex flex-col gap-3 md:hidden">
+            {users.map((user) => <MemberCard key={user.id} user={user} onChanged={load} />)}
+          </div>
+          <div className="hidden overflow-x-auto rounded-xl border md:block">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="bg-muted"><tr><th className="p-3">Name</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Clubs</th><th className="p-3"></th></tr></thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className="border-t">
+                    <td className="p-3">
+                      <Link href={`/members/${user.id}`}>{user.name}</Link>
+                      <StaffBadges user={user} />
+                      {user.dateOfBirth && <span className="block text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</span>}
+                      <SchoolBadge user={user} />
+                    </td>
+                    <td className="p-3">{user.email}</td>
+                    <td className="p-3">{titleCase(user.status)}</td>
+                    <td className="p-3">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</td>
+                    <td className="p-3"><MemberActions user={user} onChanged={load} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {users.length === 0 && <p className="mt-4 text-sm text-muted-foreground">No members on this page.</p>}
+          <div className="mt-4 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button variant="outline" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>Previous</Button>
+            <p className="text-center text-sm">Page {page} of {pages}</p>
+            <Button variant="outline" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>Next</Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -83,10 +97,24 @@ function SchoolBadge({ user }: { user: HqMember }) {
   return <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-900">{label}</span>;
 }
 
+function StaffBadges({ user }: { user: HqMember }) {
+  const clubs = user.adminClubs ?? [];
+  if (user.role !== "SUPER_ADMIN" && clubs.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap gap-1">
+      {user.role === "SUPER_ADMIN" && <Badge className="bg-amber-100 text-amber-950">Super Admin</Badge>}
+      {clubs.map((club) => (
+        <Badge key={club.clubId} className="bg-violet-100 text-violet-950">Club Admin · {club.clubName}</Badge>
+      ))}
+    </span>
+  );
+}
+
 function MemberCard({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
   return (
     <Card className="p-4">
       <Link href={`/members/${user.id}`} className="font-medium">{user.name}</Link>
+      <StaffBadges user={user} />
       <p className="text-sm text-muted-foreground">{user.email}</p>
       {user.dateOfBirth && <p className="text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</p>}
       <SchoolBadge user={user} />

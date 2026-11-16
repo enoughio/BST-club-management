@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MemberRoleBadges } from "@/components/role-badges";
 import { Field, PageIntro } from "@/components/shell";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ type RosterRow = { membershipId: string; status: string; joinedAt: string; user:
 type Note = { id: string; body: string; flag: string | null; createdAt: string; author: { id: string; name: string } | null };
 type Tab = "members" | "meetings" | "notes" | "settings";
 type Pending =
-  | { kind: "billing"; fee: number; interval: number }
+  | { kind: "billing"; fee: number; quarterly: number | null; interval: number }
   | { kind: "status"; status: string }
   | { kind: "admin"; userId: string; name: string }
   | { kind: "reset" }
@@ -54,11 +55,20 @@ function isProfileDirty(draft: ProfileDraft, club: Club) {
   return (Object.keys(saved) as (keyof ProfileDraft)[]).some((key) => draft[key] !== saved[key]);
 }
 
-function isFeeDirty(fee: string, interval: string, club: Club) {
+function quarterlyMinor(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount)) return undefined;
+  return Math.round(amount * 100);
+}
+
+function isFeeDirty(fee: string, quarterly: string, interval: string, club: Club) {
   const amountMinor = Math.round(Number(fee) * 100);
   const months = Number(interval);
-  if (!Number.isFinite(amountMinor) || !Number.isFinite(months)) return false;
-  return amountMinor !== club.membershipFeeAmount || months !== club.electionIntervalMonths;
+  const nextQuarterly = quarterlyMinor(quarterly);
+  if (!Number.isFinite(amountMinor) || !Number.isFinite(months) || nextQuarterly === undefined) return false;
+  return amountMinor !== club.membershipFeeAmount || months !== club.electionIntervalMonths || nextQuarterly !== (club.quarterlyFeeAmount ?? null);
 }
 
 export default function HqClubPage() {
@@ -75,6 +85,7 @@ export default function HqClubPage() {
   const [pending, setPending] = useState<Pending>(null);
   const [busy, setBusy] = useState(false);
   const [fee, setFee] = useState("");
+  const [quarterly, setQuarterly] = useState("");
   const [interval, setInterval] = useState("");
   const [profile, setProfile] = useState<ProfileDraft>(emptyProfile);
   const [status, setStatus] = useState("");
@@ -89,6 +100,7 @@ export default function HqClubPage() {
       setClub(data.club);
       setProfile(profileFromClub(data.club));
       setFee(String(data.club.membershipFeeAmount / 100));
+      setQuarterly(data.club.quarterlyFeeAmount == null ? "" : String(data.club.quarterlyFeeAmount / 100));
       setInterval(String(data.club.electionIntervalMonths));
       setStatus(data.club.status);
       setAdminId(data.club.currentAdmin?.id || "");
@@ -118,9 +130,9 @@ export default function HqClubPage() {
     setBusy(true);
     try {
       if (pending.kind === "billing") {
-        await api(`/clubs/${clubId}/billing`, { method: "PATCH", body: JSON.stringify({ membershipFeeAmount: pending.fee, electionIntervalMonths: pending.interval }) });
+        await api(`/clubs/${clubId}/billing`, { method: "PATCH", body: JSON.stringify({ membershipFeeAmount: pending.fee, quarterlyFeeAmount: pending.quarterly, electionIntervalMonths: pending.interval }) });
         toast.success("Fee and election cycle saved");
-        setClub((current) => current ? { ...current, membershipFeeAmount: pending.fee, electionIntervalMonths: pending.interval } : current);
+        setClub((current) => current ? { ...current, membershipFeeAmount: pending.fee, quarterlyFeeAmount: pending.quarterly, electionIntervalMonths: pending.interval } : current);
       } else if (pending.kind === "status") {
         await api(`/clubs/${clubId}`, { method: "PATCH", body: JSON.stringify({ status: pending.status }) });
         toast.success(pending.status === "INACTIVE" ? "Club paused" : club.status === "INACTIVE" && pending.status === "ACTIVE" ? "Club reactivated" : "Club status updated");
@@ -146,12 +158,13 @@ export default function HqClubPage() {
   }
 
   const profileChanged = isProfileDirty(profile, club);
-  const feeChanged = isFeeDirty(fee, interval, club);
-  const feeReady = feeChanged && Number(fee) > 0 && Number(interval) >= 1;
+  const feeChanged = isFeeDirty(fee, quarterly, interval, club);
+  const nextQuarterly = quarterlyMinor(quarterly);
+  const feeReady = feeChanged && Number(fee) > 0 && Number(interval) >= 1 && nextQuarterly !== undefined && (nextQuarterly === null || nextQuarterly > 0);
 
   function requestFeeSave() {
-    if (!feeReady) return;
-    setPending({ kind: "billing", fee: Math.round(Number(fee) * 100), interval: Number(interval) });
+    if (!feeReady || nextQuarterly === undefined) return;
+    setPending({ kind: "billing", fee: Math.round(Number(fee) * 100), quarterly: nextQuarterly, interval: Number(interval) });
   }
 
   async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -224,7 +237,8 @@ export default function HqClubPage() {
         <Card className="p-4" title="Set by headquarters. The club cannot change this from its side.">
           <p className="flex items-center gap-1 text-sm text-muted-foreground">Club fee <Info className="h-3.5 w-3.5" /></p>
           <p className="font-serif text-3xl">{money(club.membershipFeeAmount, club.currency)}</p>
-          <p className="text-xs text-muted-foreground">Charged on every new or reinstated membership.</p>
+          <p className="text-sm">per year</p>
+          <p className="text-xs text-muted-foreground">{club.quarterlyFeeAmount == null ? "Annual membership only." : `${money(club.quarterlyFeeAmount, club.currency)} per quarter.`} Charged on every new or reinstated membership.</p>
         </Card>
         <Card className="p-4" title="Set by headquarters. The club cannot change this from its side.">
           <p className="flex items-center gap-1 text-sm text-muted-foreground">Next election <Info className="h-3.5 w-3.5" /></p>
@@ -279,7 +293,24 @@ export default function HqClubPage() {
 
         {tab === "members" && (
           <div className="mt-4">
-            <div className="overflow-x-auto rounded-xl border bg-card">
+            <div className="flex flex-col gap-3 md:hidden">
+              {pageRows.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
+              {pageRows.map((row) => (
+                <Card key={row.membershipId} className="p-4">
+                  <Link href={`/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link>
+                  <MemberRoleBadges offices={row.offices} isClubAdmin={club.currentAdmin?.id === row.user.id} />
+                  {!row.offices.length && club.currentAdmin?.id !== row.user.id && <p className="mt-1 text-xs text-muted-foreground">Member</p>}
+                  <p className="truncate text-sm text-muted-foreground">{row.user.email}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                    <Badge className={memberTone[row.status] || ""}>{row.status === "EXPIRED" ? "Probationary" : row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge>
+                    <span className="text-muted-foreground">{row.lastAttendanceAt ? `Last attendance ${when(row.lastAttendanceAt)}` : "No attendance"}</span>
+                    <span>{row.dues ? <span className={row.dues.status === "PAID" ? "text-emerald-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</span>
+                    <span className="text-muted-foreground">Joined {when(row.joinedAt)}</span>
+                  </div>
+                </Card>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr><th className="p-3">Name</th><th className="p-3">Role</th><th className="p-3">Status</th><th className="p-3">Last attendance</th><th className="p-3">Dues</th><th className="p-3">Joined</th></tr>
@@ -289,7 +320,10 @@ export default function HqClubPage() {
                   {pageRows.map((row) => (
                     <tr key={row.membershipId} className="border-t">
                       <td className="p-3"><Link href={`/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link><p className="max-w-[16rem] truncate text-xs text-muted-foreground">{row.user.email}</p></td>
-                      <td className="p-3">{row.offices.length ? row.offices.map((title) => titleCase(title)).join(", ") : club.currentAdmin?.id === row.user.id ? "Club Admin" : <span className="text-muted-foreground">Member</span>}{row.offices.length > 0 && club.currentAdmin?.id === row.user.id ? " · Club Admin" : ""}</td>
+                      <td className="p-3">
+                        <MemberRoleBadges offices={row.offices} isClubAdmin={club.currentAdmin?.id === row.user.id} className="flex flex-wrap gap-1" />
+                        {!row.offices.length && club.currentAdmin?.id !== row.user.id && <span className="text-muted-foreground">Member</span>}
+                      </td>
                       <td className="p-3"><Badge className={memberTone[row.status] || ""}>{row.status === "EXPIRED" ? "Probationary" : row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge></td>
                       <td className="p-3">{row.lastAttendanceAt ? when(row.lastAttendanceAt) : <span className="text-muted-foreground">Never</span>}</td>
                       <td className="p-3">{row.dues ? <span className={row.dues.status === "PAID" ? "text-emerald-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</td>
@@ -370,7 +404,8 @@ export default function HqClubPage() {
               <h3 className="font-serif text-xl">Fee and election cycle</h3>
               <p className="text-xs text-muted-foreground">Affects billing and governance. Every change is confirmed and written to the audit log.</p>
               <div className="mt-3 flex flex-col gap-3">
-                <Field label="Membership fee (rupees)"><Input value={fee} inputMode="decimal" onChange={(event) => setFee(event.target.value)} /></Field>
+                <Field label="Annual fee (rupees, per year)"><Input value={fee} inputMode="decimal" onChange={(event) => setFee(event.target.value)} required /></Field>
+                <Field label="Quarterly fee (rupees, per quarter)"><Input value={quarterly} inputMode="decimal" placeholder="Leave empty for annual only" onChange={(event) => setQuarterly(event.target.value)} /></Field>
                 <Field label="Election interval (months)"><Input value={interval} inputMode="numeric" onChange={(event) => setInterval(event.target.value)} /></Field>
                 <Button type="button" disabled={!feeReady} onClick={requestFeeSave}>Review change</Button>
               </div>
@@ -436,7 +471,11 @@ export default function HqClubPage() {
 
 function describePending(pending: Pending, club: Club) {
   if (!pending) return { title: "", description: "", confirm: "" };
-  if (pending.kind === "billing") return { title: "Change fee and election cycle?", description: `Fee ${money(club.membershipFeeAmount, club.currency)} → ${money(pending.fee, club.currency)}; election every ${club.electionIntervalMonths} → ${pending.interval} months. The next election date is recalculated. Recorded in the audit log.`, confirm: "Save" };
+  if (pending.kind === "billing") {
+    const fromQuarterly = club.quarterlyFeeAmount == null ? "annual only" : `${money(club.quarterlyFeeAmount, club.currency)} per quarter`;
+    const toQuarterly = pending.quarterly == null ? "annual only" : `${money(pending.quarterly, club.currency)} per quarter`;
+    return { title: "Change fee and election cycle?", description: `Annual fee ${money(club.membershipFeeAmount, club.currency)} per year → ${money(pending.fee, club.currency)} per year; quarterly ${fromQuarterly} → ${toQuarterly}; election every ${club.electionIntervalMonths} → ${pending.interval} months. The next election date is recalculated. Recorded in the audit log.`, confirm: "Save" };
+  }
   if (pending.kind === "status" && pending.status === "INACTIVE") return { title: `Suspend ${club.name}?`, description: "The club is marked Inactive and shown as paused. Members keep their accounts; nobody is emailed. This change is recorded in the audit log.", confirm: "Suspend" };
   if (pending.kind === "status" && pending.status === "ACTIVE" && club.status === "INACTIVE") return { title: `Reactivate ${club.name}?`, description: "The club returns to Active status. This change is recorded in the audit log.", confirm: "Reactivate" };
   if (pending.kind === "status") return { title: `Mark ${club.name} as ${titleCase(pending.status)}?`, description: "Recorded in the audit log.", confirm: "Change status" };

@@ -14,6 +14,21 @@ export function addMonths(date: Date, months: number) {
   return next;
 }
 
+export function addUtcMonths(date: Date, months: number) {
+  const next = new Date(date.getTime());
+  const day = next.getUTCDate();
+  next.setUTCDate(1);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  const last = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, last));
+  return next;
+}
+
+/** Membership end: one year for annual, three months for quarterly, from the payment or activation date. */
+export function periodEndsAt(start: Date, feePeriod: "ANNUAL" | "QUARTERLY") {
+  return addUtcMonths(start, feePeriod === "QUARTERLY" ? 3 : 12);
+}
+
 export function parseDateOnly(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("Date must be YYYY-MM-DD");

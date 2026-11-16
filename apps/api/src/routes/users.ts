@@ -6,14 +6,34 @@ import { writeAudit } from "../lib/audit";
 import { createAuthToken } from "../lib/auth";
 import { HttpError } from "../lib/errors";
 import { asyncHandler } from "../lib/http";
-import { sendSetPassword } from "../lib/mailer";
+import { periodEndsAt } from "../lib/dates";
+import { sendMemberJoinedFromNotice, sendMemberLeftNotice, sendNewMemberAdminNote, sendSetPassword } from "../lib/mailer";
 import { prisma } from "../lib/prisma";
 import { childProfileData } from "../lib/child";
-import { sessionFor, userCore } from "../lib/serialize";
+import { membershipTenure, sessionFor, userCore } from "../lib/serialize";
 import { putObject } from "../lib/storage";
 
 export const usersRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+
+const feePeriodSchema = z.enum(["ANNUAL", "QUARTERLY"]);
+
+async function deliver(send: () => Promise<boolean>) {
+  try {
+    return await send();
+  } catch (error) {
+    console.error(error);
+    return false;
+  }
+}
+
+function currentAdmin(clubId: string) {
+  return prisma.clubAdmin.findFirst({
+    where: { clubId, endedAt: null },
+    orderBy: { appointedAt: "desc" },
+    include: { user: { select: { name: true, email: true } } },
+  });
+}
 
 const profileFields = {
   name: z.string().min(2).max(120),
@@ -55,7 +75,17 @@ usersRouter.get(
         orderBy: { name: "asc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { memberships: { include: { club: { select: { id: true, name: true } } } } },
+        include: {
+          memberships: { include: { club: { select: { id: true, name: true } } } },
+          adminAppointments: {
+            where: { endedAt: null },
+            select: { clubId: true, club: { select: { name: true } } },
+          },
+          officerRoles: {
+            where: { endedAt: null },
+            select: { clubId: true, title: true },
+          },
+        },
       }),
     ]);
     res.json({
@@ -64,11 +94,20 @@ usersRouter.get(
       pageSize,
       users: users.map((user) => ({
         ...userCore(user),
+        adminClubs: user.adminAppointments.map((row) => ({
+          clubId: row.clubId,
+          clubName: row.club.name,
+        })),
+        offices: user.officerRoles.map((row) => ({
+          clubId: row.clubId,
+          title: row.title,
+        })),
         memberships: user.memberships.map((row) => ({
           clubId: row.clubId,
           clubName: row.club.name,
           status: row.status,
           joinedAt: row.joinedAt,
+          ...membershipTenure(row),
         })),
       })),
     });
@@ -83,6 +122,7 @@ usersRouter.post(
       .object({
         email: z.string().email(),
         clubId: z.string().min(1),
+        feePeriod: feePeriodSchema,
         paymentAmount: z.number().int().positive(),
         paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         paymentReference: z.string().min(2).max(80),
@@ -91,10 +131,14 @@ usersRouter.post(
       .parse(req.body);
     const club = await prisma.club.findUnique({ where: { id: body.clubId } });
     if (!club) throw new HttpError(404, "Club not found");
+    if (body.feePeriod === "QUARTERLY" && club.quarterlyFeeAmount == null) {
+      throw new HttpError(400, "This club does not offer quarterly membership");
+    }
     const email = body.email.toLowerCase();
+    const paidAt = new Date(`${body.paymentDate}T00:00:00.000Z`);
+    const endsAt = periodEndsAt(paidAt, body.feePeriod);
     const created = await prisma.$transaction(async (tx) => {
       let user = await tx.user.findUnique({ where: { email } });
-      let isNew = false;
       const data = {
         name: body.name,
         phone: body.phone || null,
@@ -108,14 +152,33 @@ usersRouter.post(
       };
       if (!user) {
         user = await tx.user.create({ data: { email, ...data, role: "USER", status: "INVITED" } });
-        isNew = true;
       } else {
+        const active = await tx.membership.findUnique({
+          where: { userId_clubId: { userId: user.id, clubId: club.id } },
+        });
+        if (active?.status === "ACTIVE") {
+          throw new HttpError(409, "This person already has an active membership in this club");
+        }
         user = await tx.user.update({ where: { id: user.id }, data });
       }
-      await tx.membership.upsert({
+      const membership = await tx.membership.upsert({
         where: { userId_clubId: { userId: user.id, clubId: club.id } },
-        create: { userId: user.id, clubId: club.id, status: "ACTIVE", joinedAt: new Date(body.paymentDate), gradeAtJoin: data.grade },
-        update: { status: "ACTIVE", endedAt: null },
+        create: {
+          userId: user.id,
+          clubId: club.id,
+          status: "ACTIVE",
+          joinedAt: paidAt,
+          feePeriod: body.feePeriod,
+          periodEndsAt: endsAt,
+          gradeAtJoin: data.grade,
+        },
+        update: {
+          status: "ACTIVE",
+          endedAt: null,
+          feePeriod: body.feePeriod,
+          periodEndsAt: endsAt,
+          transferredAt: null,
+        },
       });
       const invoice = await tx.duesInvoice.create({
         data: {
@@ -126,24 +189,156 @@ usersRouter.post(
           status: "PAID",
           method: "MANUAL",
           manualReference: body.paymentReference,
-          paidAt: new Date(body.paymentDate),
+          paidAt,
         },
       });
-      return { user, invoice, isNew };
+      return { user, invoice, membership, needsPassword: !user.passwordHash };
     });
-    if (created.isNew || !created.user.passwordHash) {
-      const token = await createAuthToken(created.user.id, "INVITE", 7);
-      const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/accept-invite?token=${token}`;
-      await sendSetPassword(created.user.email, created.user.name, url);
+    let passwordEmailSent = false;
+    if (created.needsPassword) {
+      passwordEmailSent = await deliver(async () => {
+        const token = await createAuthToken(created.user.id, "INVITE", 7);
+        const url = `${process.env.WEB_ORIGIN || "http://localhost:3000"}/accept-invite?token=${token}`;
+        return sendSetPassword(created.user.email, created.user.name, url);
+      });
     }
+    const admin = await currentAdmin(club.id);
+    const adminEmailSent = admin
+      ? await deliver(() =>
+          sendNewMemberAdminNote({
+            to: admin.user.email,
+            adminName: admin.user.name,
+            memberName: created.user.name,
+            memberEmail: created.user.email,
+            clubName: club.name,
+            askedToSetPassword: created.needsPassword,
+          }),
+        )
+      : false;
     await writeAudit({
       actorId: actor.id,
       action: "member.manual_create",
       entityType: "User",
       entityId: created.user.id,
-      snapshot: { email, clubId: club.id, paymentReference: body.paymentReference, amount: body.paymentAmount },
+      snapshot: { email, clubId: club.id, paymentReference: body.paymentReference, amount: body.paymentAmount, feePeriod: body.feePeriod },
     });
-    res.status(201).json({ user: userCore(created.user), invoiceId: created.invoice.id });
+    res.status(201).json({
+      user: userCore(created.user),
+      invoiceId: created.invoice.id,
+      clubName: club.name,
+      payment: { amount: body.paymentAmount, date: paidAt.toISOString(), reference: body.paymentReference },
+      feePeriod: created.membership.feePeriod,
+      periodEndsAt: created.membership.periodEndsAt.toISOString(),
+      passwordEmailSent,
+      adminEmailSent,
+      adminName: admin?.user.name ?? null,
+      adminEmail: admin?.user.email ?? null,
+    });
+  }),
+);
+
+usersRouter.post(
+  "/:id/transfer",
+  asyncHandler(async (req, res) => {
+    const actor = requireSuperAdmin(req);
+    const body = z.object({ fromClubId: z.string().min(1), toClubId: z.string().min(1) }).parse(req.body);
+    if (body.fromClubId === body.toClubId) throw new HttpError(400, "The destination club must be a different club");
+    const member = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!member) throw new HttpError(404, "User not found");
+    const [fromClub, toClub] = await Promise.all([
+      prisma.club.findUnique({ where: { id: body.fromClubId } }),
+      prisma.club.findUnique({ where: { id: body.toClubId } }),
+    ]);
+    if (!fromClub || !toClub) throw new HttpError(404, "Club not found");
+    const now = new Date();
+    const moved = await prisma.$transaction(async (tx) => {
+      const source = await tx.membership.findUnique({
+        where: { userId_clubId: { userId: member.id, clubId: fromClub.id } },
+      });
+      if (!source || source.status !== "ACTIVE") {
+        throw new HttpError(400, "The source membership must be active");
+      }
+      const destination = await tx.membership.findUnique({
+        where: { userId_clubId: { userId: member.id, clubId: toClub.id } },
+      });
+      if (destination?.status === "ACTIVE") {
+        throw new HttpError(409, "This person already has an active membership in the destination club");
+      }
+      const sourceAdmin = await tx.clubAdmin.findFirst({
+        where: { clubId: fromClub.id, userId: member.id, endedAt: null },
+      });
+      if (sourceAdmin) {
+        throw new HttpError(400, "This member is the club admin of the source club. Appoint another admin first.");
+      }
+      await tx.officerRole.updateMany({
+        where: { clubId: fromClub.id, userId: member.id, endedAt: null },
+        data: { endedAt: now },
+      });
+      await tx.membership.update({
+        where: { id: source.id },
+        data: { status: "LAPSED", endedAt: now },
+      });
+      return tx.membership.upsert({
+        where: { userId_clubId: { userId: member.id, clubId: toClub.id } },
+        create: {
+          userId: member.id,
+          clubId: toClub.id,
+          status: "ACTIVE",
+          joinedAt: source.joinedAt,
+          feePeriod: source.feePeriod,
+          periodEndsAt: source.periodEndsAt,
+          transferredAt: now,
+          gradeAtJoin: source.gradeAtJoin,
+        },
+        update: {
+          status: "ACTIVE",
+          endedAt: null,
+          joinedAt: source.joinedAt,
+          feePeriod: source.feePeriod,
+          periodEndsAt: source.periodEndsAt,
+          transferredAt: now,
+          gradeAtJoin: source.gradeAtJoin,
+        },
+      });
+    });
+    const [leftAdmin, joinedAdmin] = await Promise.all([currentAdmin(fromClub.id), currentAdmin(toClub.id)]);
+    const notice = {
+      memberName: member.name,
+      memberEmail: member.email,
+      fromClubName: fromClub.name,
+      toClubName: toClub.name,
+    };
+    const leftAdminEmailSent = leftAdmin
+      ? await deliver(() => sendMemberLeftNotice({ to: leftAdmin.user.email, adminName: leftAdmin.user.name, ...notice }))
+      : false;
+    const joinedAdminEmailSent = joinedAdmin
+      ? await deliver(() => sendMemberJoinedFromNotice({ to: joinedAdmin.user.email, adminName: joinedAdmin.user.name, ...notice }))
+      : false;
+    await writeAudit({
+      actorId: actor.id,
+      action: "membership.transfer",
+      entityType: "Membership",
+      entityId: moved.id,
+      snapshot: {
+        userId: member.id,
+        fromClubId: fromClub.id,
+        toClubId: toClub.id,
+        joinedAt: moved.joinedAt.toISOString(),
+        periodEndsAt: moved.periodEndsAt.toISOString(),
+        feePeriod: moved.feePeriod,
+        transferredAt: moved.transferredAt?.toISOString() ?? null,
+      },
+    });
+    res.json({
+      fromClubName: fromClub.name,
+      toClubName: toClub.name,
+      joinedAt: moved.joinedAt.toISOString(),
+      periodEndsAt: moved.periodEndsAt.toISOString(),
+      feePeriod: moved.feePeriod,
+      transferredAt: moved.transferredAt?.toISOString() ?? now.toISOString(),
+      leftAdminEmailSent,
+      joinedAdminEmailSent,
+    });
   }),
 );
 
@@ -320,6 +515,7 @@ profileRouter.get(
         joinedAt: row.joinedAt,
         endedAt: row.endedAt,
         gradeAtJoin: row.gradeAtJoin,
+        ...membershipTenure(row),
         club: row.club,
       })),
     });

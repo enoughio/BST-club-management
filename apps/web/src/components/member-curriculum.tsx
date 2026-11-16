@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, ChevronDown, Lock, Share2 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { CertificateView } from "@/components/certificate-card";
@@ -8,8 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Sheet } from "@/components/ui/sheet";
-import { fileUrl } from "@/lib/api";
-import { kindLabel, type CurriculumLevel, type CurriculumProject, type LearningMaterial } from "@/lib/curriculum";
+import type { CurriculumLevel, CurriculumProject } from "@/lib/curriculum";
 import { when } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +38,7 @@ export function MemberCurriculum({
   onSelect,
   certificates = [],
   memberName,
+  resourcesHref,
 }: {
   levels: TimelineLevel[];
   progress?: ProgressRow[];
@@ -46,9 +47,9 @@ export function MemberCurriculum({
   onSelect?: (projectId: string) => void;
   certificates?: CertificateView[];
   memberName?: string;
+  resourcesHref: (projectId: string) => string;
 }) {
   const [openIds, setOpenIds] = useState<string[] | null>(null);
-  const [guide, setGuide] = useState<CurriculumProject | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const memberTimeline = !simulated;
 
@@ -161,7 +162,7 @@ export function MemberCurriculum({
                 <LevelNode state={state} number={view.number} />
                 <span className="flex min-h-11 min-w-0 flex-1 items-center gap-2 py-1">
                   <span className="min-w-0 flex-1">
-                    <span className="block font-medium">Level {view.number}: {view.level.name || "Untitled level"}</span>
+                    <span className="block font-serif">Level {view.number}: {view.level.name || "Untitled level"}</span>
                     <span className="block text-xs text-muted-foreground">{stateLabel(state)}</span>
                   </span>
                   <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", open ? "" : "-rotate-90")} />
@@ -170,7 +171,7 @@ export function MemberCurriculum({
               {requirement && !open && <p className="ml-14 mt-1 text-xs text-neutral-500">{requirement}</p>}
               {active && (
                 <div className="ml-14 mt-3">
-                  <ActiveProjectCard project={active} started={isStarted(active, view.index, view.level, progressById, simulated)} onSelect={onSelect} onGuide={() => setGuide(active)} />
+                  <ActiveProjectCard project={active} started={isStarted(active, view.index, view.level, progressById, simulated)} onSelect={onSelect} resourcesHref={resourcesHref(active.id)} />
                 </div>
               )}
               <div className={cn("ml-14 grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none", open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}>
@@ -190,7 +191,7 @@ export function MemberCurriculum({
                           status={status}
                           row={row}
                           onSelect={onSelect}
-                          onGuide={() => setGuide(project)}
+                          resourcesHref={resourcesHref(project.id)}
                         />
                       );
                     })}
@@ -224,10 +225,6 @@ export function MemberCurriculum({
           )}
         </section>
       )}
-
-      <Sheet open={Boolean(guide)} onOpenChange={(open) => { if (!open) setGuide(null); }} title={guide?.title || "Learning guide"}>
-        {guide && <GuidePanel project={guide} />}
-      </Sheet>
 
       {memberTimeline && (
         <Sheet open={shareOpen} onOpenChange={setShareOpen} title="Share progress">
@@ -263,7 +260,7 @@ function LevelNode({ state, number }: { state: NodeState; number: number }) {
   );
 }
 
-function ActiveProjectCard({ project, started, onSelect, onGuide }: { project: CurriculumProject; started: boolean; onSelect?: (projectId: string) => void; onGuide: () => void }) {
+function ActiveProjectCard({ project, started, onSelect, resourcesHref }: { project: CurriculumProject; started: boolean; onSelect?: (projectId: string) => void; resourcesHref: string }) {
   const description = project.description?.trim() || project.title || "Untitled project";
   return (
     <Card className="border-[hsl(221_83%_40%)] p-4 shadow-sm ring-1 ring-[hsl(221_83%_40%/0.25)]">
@@ -274,23 +271,25 @@ function ActiveProjectCard({ project, started, onSelect, onGuide }: { project: C
         {onSelect && (
           <Button type="button" className="sm:min-w-40" onClick={() => onSelect(project.id)}>{started ? "Continue" : "Start Project"}</Button>
         )}
-        <Button type="button" variant="outline" onClick={onGuide}>View Guide</Button>
+        <Button variant="outline" asChild>
+          <Link href={resourcesHref}>View Guide</Link>
+        </Button>
       </div>
     </Card>
   );
 }
 
-function ProjectCard({ project, status, row, onSelect, onGuide }: {
+function ProjectCard({ project, status, row, onSelect, resourcesHref }: {
   project: CurriculumProject;
   status: "Approved" | "In Progress" | "Available";
   row?: ProgressRow;
   onSelect?: (projectId: string) => void;
-  onGuide: () => void;
+  resourcesHref: string;
 }) {
   return (
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="font-medium">{project.title || "Untitled project"}</p>
+        <p className="font-serif">{project.title || "Untitled project"}</p>
         <Badge className={status === "Approved" ? "bg-emerald-100 text-emerald-900" : status === "In Progress" ? "bg-blue-100 text-blue-900" : "bg-card text-foreground"}>{status}{row?.approved && row.score != null ? ` · ${row.score}` : ""}</Badge>
       </div>
       {project.description && <p className="mt-2 text-sm text-muted-foreground">{project.description}</p>}
@@ -300,41 +299,11 @@ function ProjectCard({ project, status, row, onSelect, onGuide }: {
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         {onSelect && status === "Available" && <Button type="button" variant="outline" onClick={() => onSelect(project.id)}>Start Project</Button>}
         {onSelect && status === "In Progress" && <Button type="button" variant="outline" onClick={() => onSelect(project.id)}>Continue</Button>}
-        <Button type="button" variant="outline" onClick={onGuide}>View Guide</Button>
+        <Button variant="outline" asChild>
+          <Link href={resourcesHref}>View Guide</Link>
+        </Button>
       </div>
     </Card>
-  );
-}
-
-function GuidePanel({ project }: { project: CurriculumProject }) {
-  return (
-    <div className="flex flex-col gap-3">
-      {project.description && <p className="text-sm text-muted-foreground">{project.description}</p>}
-      {project.evaluationCriteria && <p className="text-sm"><span className="font-medium">Evaluation criteria. </span>{project.evaluationCriteria}</p>}
-      {project.materials.length === 0 && <p className="rounded-lg bg-muted px-3 py-3 text-sm">No guide yet</p>}
-      {project.materials.map((material) => <MaterialBlock key={material.id} material={material} />)}
-    </div>
-  );
-}
-
-function MaterialBlock({ material }: { material: LearningMaterial }) {
-  const label = `${kindLabel(material.kind)} · ${material.title || "Untitled"}`;
-  const url = material.url?.trim() || "";
-  const frame = url ? sameOriginUrl(url) : null;
-  return (
-    <div className="rounded-lg border p-3">
-      <p className="text-sm font-medium">{label}</p>
-      {frame && <iframe title={material.title || "Guide"} src={frame} className="mt-2 h-64 w-full rounded-md border" />}
-      {url && !frame && (
-        <a className="mt-2 inline-flex min-h-11 items-center text-sm text-primary" href={url} target="_blank" rel="noreferrer">Open link</a>
-      )}
-      {material.fileKey && !material.id.startsWith("new-") && (
-        <a className="mt-1 inline-flex min-h-11 items-center text-sm text-primary" href={fileUrl(`/api/v1/curriculum/materials/${material.id}/download`)} target="_blank" rel="noreferrer">
-          Download{material.fileName ? ` ${material.fileName}` : " file"}
-        </a>
-      )}
-      {!url && !material.fileKey && <p className="mt-1 text-sm text-muted-foreground">{material.fileName || "No file yet"}</p>}
-    </div>
   );
 }
 
@@ -424,17 +393,6 @@ function progressSummary({ name, percent, completedLevels, achievements }: { nam
 
 function mailtoHref(name: string, summary: string) {
   return `mailto:?subject=${encodeURIComponent(`${name}'s club progress`)}&body=${encodeURIComponent(summary)}`;
-}
-
-function sameOriginUrl(value: string) {
-  if (typeof window === "undefined") return null;
-  try {
-    const url = new URL(value, window.location.origin);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.origin === window.location.origin ? url.toString() : null;
-  } catch {
-    return null;
-  }
 }
 
 async function shareSnapshot(summary: string, name: string, percent: number, completedLevels: string[], achievements: Achievement[]) {

@@ -36,7 +36,7 @@ export function ConfirmDialog({
           {children && <div className="mt-4 flex flex-col gap-3">{children}</div>}
           <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button type="button" variant="outline" disabled={pending} onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="button" variant={destructive ? "destructive" : "default"} disabled={pending || confirmDisabled} onClick={onConfirm}>
+            <Button type="button" variant={destructive ? "destructive" : "default"} pending={pending} disabled={confirmDisabled} onClick={onConfirm}>
               {pending ? "Working…" : confirmLabel}
             </Button>
           </div>

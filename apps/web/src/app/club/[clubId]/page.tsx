@@ -51,10 +51,8 @@ export default function ClubHome() {
   const since = Date.now() - days * 86400000;
   const active = members.filter((row) => row.status === "ACTIVE");
   const expiring = active.filter((row) => {
-    const joined = new Date(row.joinedAt);
-    const next = new Date(joined);
-    next.setFullYear(new Date().getFullYear());
-    if (next.getTime() < Date.now() - 86400000) next.setFullYear(next.getFullYear() + 1);
+    const next = periodEnd(row);
+    if (!next) return false;
     const delta = next.getTime() - Date.now();
     return delta >= 0 && delta <= 15 * 86400000;
   });
@@ -104,7 +102,7 @@ export default function ClubHome() {
       <PageIntro title="Overview" lede={club?.name || "Club"} actions={<RangeToggle />} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Total members" value={members.length} hint="Everyone on the club roll" active={focus === "members"} onClick={() => setFocus(focus === "members" ? null : "members")} />
-        <Stat label="Expiring soon" value={expiring.length} hint="Anniversary falls in the next 15 days" active={focus === "expiring"} onClick={() => setFocus(focus === "expiring" ? null : "expiring")} />
+        <Stat label="Expiring soon" value={expiring.length} hint="Period ends in the next 15 days" active={focus === "expiring"} onClick={() => setFocus(focus === "expiring" ? null : "expiring")} />
         <Stat label="Upcoming meetings" value={upcoming.length} hint="Drafts and finalized meetings still ahead" active={focus === "meetings"} onClick={() => setFocus(focus === "meetings" ? null : "meetings")} />
         <Stat label="Open roles" value={openRoles.length} hint="Officer seats with nobody assigned" active={focus === "roles"} onClick={() => setFocus(focus === "roles" ? null : "roles")} />
       </div>
@@ -116,7 +114,7 @@ export default function ClubHome() {
       </div>
 
       {focus === "members" && <FilterList title="Members" rows={members.map((row) => row.user.name)} />}
-      {focus === "expiring" && <FilterList title="Memberships expiring soon" rows={expiring.map((row) => `${row.user.name} · anniversary ${when(row.joinedAt)}`)} empty="No memberships renew in the next 15 days." />}
+      {focus === "expiring" && <FilterList title="Memberships expiring soon" rows={expiring.map((row) => `${row.user.name} · ends ${when(periodEnd(row)?.toISOString())}`)} empty="No memberships end in the next 15 days." />}
       {focus === "meetings" && <FilterList title="Upcoming meetings" rows={upcoming.map((meeting) => `${meeting.title} · ${when(meeting.meetingDate)}`)} empty="No upcoming meetings." />}
       {focus === "roles" && <FilterList title="Open roles" rows={openRoles.map((title) => titleCase(title))} empty="Every officer seat is filled." />}
 
@@ -206,6 +204,19 @@ export default function ClubHome() {
       </ConfirmDialog>
     </div>
   );
+}
+
+function periodEnd(row: MemberRow) {
+  if (row.periodEndsAt) {
+    const end = new Date(row.periodEndsAt);
+    return Number.isNaN(end.getTime()) ? null : end;
+  }
+  const joined = new Date(row.joinedAt);
+  if (Number.isNaN(joined.getTime())) return null;
+  const next = new Date(joined);
+  next.setFullYear(new Date().getFullYear());
+  if (next.getTime() < Date.now() - 86400000) next.setFullYear(next.getFullYear() + 1);
+  return next;
 }
 
 function Stat({ label, value, hint, active, onClick }: { label: string; value: number; hint: string; active: boolean; onClick: () => void }) {

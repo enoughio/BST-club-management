@@ -15,7 +15,7 @@ import { ApiError, api, fileUrl } from "@/lib/api";
 import { money, titleCase, when } from "@/lib/format";
 import type { Club } from "@/lib/types";
 
-const emptyForm = { name: "", city: "", meetingSchedule: "", charterDate: "", membershipFeeAmount: "1500", electionIntervalMonths: "6", currency: "INR", status: "ACTIVE" };
+const emptyForm = { name: "", city: "", meetingSchedule: "", charterDate: "", membershipFeeAmount: "1500", quarterlyFeeAmount: "", electionIntervalMonths: "6", currency: "INR", status: "ACTIVE" };
 
 type Filter = "ALL" | "ACTIVE" | "INACTIVE" | "PROVISIONAL";
 type Sort = "name" | "members" | "activity";
@@ -69,6 +69,12 @@ export default function HqClubsPage() {
 
   async function createClub(event: React.FormEvent) {
     event.preventDefault();
+    const quarterlyText = form.quarterlyFeeAmount.trim();
+    const quarterlyMinor = quarterlyText ? Math.round(Number(quarterlyText) * 100) : null;
+    if (quarterlyMinor !== null && (!Number.isFinite(quarterlyMinor) || quarterlyMinor <= 0)) {
+      toast.error("Quarterly fee must be a positive amount, or left empty for annual membership only");
+      return;
+    }
     try {
       await api("/clubs", {
         method: "POST",
@@ -79,6 +85,7 @@ export default function HqClubsPage() {
           charterDate: form.charterDate,
           status: form.status,
           membershipFeeAmount: Math.round(Number(form.membershipFeeAmount) * 100),
+          quarterlyFeeAmount: quarterlyMinor,
           currency: form.currency,
           electionIntervalMonths: Number(form.electionIntervalMonths),
         }),
@@ -166,7 +173,7 @@ export default function HqClubsPage() {
                   <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
                     <div className="flex items-start gap-2"><CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><div><dt className="text-xs text-muted-foreground">Meeting schedule</dt><dd>{club.meetingSchedule || "Not set"}</dd></div></div>
                     <div className="flex items-start gap-2"><Vote className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><div><dt className="text-xs text-muted-foreground">Election cycle</dt><dd>Every {club.electionIntervalMonths} months · next {when(club.nextElectionAt)}</dd></div></div>
-                    <div className="flex items-start gap-2"><IndianRupee className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><div><dt className="text-xs text-muted-foreground">Fee</dt><dd>{money(club.membershipFeeAmount, club.currency)}</dd></div></div>
+                    <div className="flex items-start gap-2"><IndianRupee className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><div><dt className="text-xs text-muted-foreground">Fees</dt><dd>{money(club.membershipFeeAmount, club.currency)} per year</dd><dd className="text-muted-foreground">{club.quarterlyFeeAmount == null ? "Annual only" : `${money(club.quarterlyFeeAmount, club.currency)} per quarter`}</dd></div></div>
                   </dl>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
                     <Users className="h-4 w-4 text-muted-foreground" />
@@ -231,7 +238,8 @@ export default function HqClubsPage() {
               <option value="PROVISIONAL">Provisional</option>
             </Select>
           </Field>
-          <Field label="Membership fee (rupees)"><Input value={form.membershipFeeAmount} onChange={(event) => setForm({ ...form, membershipFeeAmount: event.target.value })} required /></Field>
+          <Field label="Annual fee (rupees, per year)"><Input value={form.membershipFeeAmount} onChange={(event) => setForm({ ...form, membershipFeeAmount: event.target.value })} required /></Field>
+          <Field label="Quarterly fee (rupees, per quarter)"><Input value={form.quarterlyFeeAmount} placeholder="Leave empty for annual only" onChange={(event) => setForm({ ...form, quarterlyFeeAmount: event.target.value })} /></Field>
           <Field label="Currency"><Select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })}><option>INR</option></Select></Field>
           <Field label="Election interval (months)"><Input value={form.electionIntervalMonths} onChange={(event) => setForm({ ...form, electionIntervalMonths: event.target.value })} required /></Field>
           <Button type="submit">Create club</Button>
