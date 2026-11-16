@@ -229,7 +229,7 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
                   <p>{row.clubName} · {titleCase(row.status)}</p>
                   {row.transferredAt && (
                     <p className="mt-1 flex flex-wrap items-center gap-2 text-muted-foreground">
-                      <Badge className="bg-sky-100 text-sky-900">Transferred</Badge>
+                      <Badge className="bg-blue-100 text-blue-900">Transferred</Badge>
                       <span>Joined {when(row.joinedAt)}</span>
                       <span>Period ends {when(row.periodEndsAt)}</span>
                     </p>

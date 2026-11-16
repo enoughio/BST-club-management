@@ -94,7 +94,7 @@ export default function ClubCommitteePage() {
   return (
     <div>
       <PageIntro title="Current committee" lede="Present leadership team" />
-      {overlaps && <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">Two recorded terms overlap. Check the dates before the next election.</p>}
+      {overlaps && <p className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-950">Two recorded terms overlap. Check the dates before the next election.</p>}
       <div className="grid gap-3 sm:grid-cols-2">
         {TITLES.map((title) => {
           const officer = current.find((row) => row.title === title);

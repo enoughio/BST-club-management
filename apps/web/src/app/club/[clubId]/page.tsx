@@ -125,7 +125,7 @@ export default function ClubHome() {
           <ul className="mt-3 flex flex-col gap-2 text-sm">
             {birthdays.length === 0 && <li className="text-muted-foreground">No birthdays in the next 30 days.</li>}
             {birthdays.map((row) => (
-              <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-900">
+              <li key={row.id} className="flex items-center justify-between gap-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-yellow-950">
                 <span className="font-medium">{row.name}</span>
                 <span>{row.days === 0 ? "Today" : `${row.days} day${row.days === 1 ? "" : "s"}`} · {when(row.date)}</span>
               </li>
@@ -151,7 +151,7 @@ export default function ClubHome() {
           {!narrow && (
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={attendance}><XAxis dataKey="label" /><YAxis /><Tooltip /><Line dataKey="rate" stroke="#1e3a5f" /></LineChart>
+                <LineChart data={attendance}><XAxis dataKey="label" /><YAxis /><Tooltip /><Line dataKey="rate" stroke="hsl(var(--primary))" /></LineChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -166,7 +166,7 @@ export default function ClubHome() {
           {!narrow && (
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={growth}><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="joined" stackId="a" fill="#9a3412" /><Bar dataKey="active" stackId="b" fill="#1e3a5f" /></BarChart>
+                <BarChart data={growth}><XAxis dataKey="month" /><YAxis allowDecimals={false} /><Tooltip /><Bar dataKey="joined" stackId="a" fill="hsl(var(--accent))" /><Bar dataKey="active" stackId="b" fill="hsl(var(--primary))" /></BarChart>
               </ResponsiveContainer>
             </div>
           )}

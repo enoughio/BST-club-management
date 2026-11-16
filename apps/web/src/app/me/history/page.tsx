@@ -51,7 +51,7 @@ export default function HistoryPage() {
             <Card key={row.id} className="p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="font-medium">{row.club.name}</p>
-                {row.transferredAt && <Badge className="bg-sky-100 text-sky-900">Transferred</Badge>}
+                {row.transferredAt && <Badge className="bg-blue-100 text-blue-900">Transferred</Badge>}
               </div>
               <p className="text-sm text-muted-foreground">{row.club.city} · {titleCase(row.status)}{row.feePeriod ? ` · ${titleCase(row.feePeriod)} (${feePeriodPhrase(row.feePeriod)})` : ""}</p>
               <p className="text-sm">{row.transferredAt ? "Original join date" : "Joined"} {when(row.joinedAt)}{row.periodEndsAt ? ` · current period ends ${when(row.periodEndsAt)}` : ""}{row.endedAt ? ` · ended ${when(row.endedAt)}` : ""}</p>

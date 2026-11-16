@@ -3,34 +3,86 @@
 @tailwind utilities;
 
 :root {
-  --background: 40 33% 96%;
-  --foreground: 30 10% 10%;
-  --card: 40 45% 98%;
-  --card-foreground: 30 10% 10%;
-  --popover: 40 45% 98%;
-  --popover-foreground: 30 10% 10%;
-  --primary: 213 52% 24%;
-  --primary-foreground: 40 40% 96%;
-  --secondary: 36 32% 90%;
-  --secondary-foreground: 30 10% 14%;
-  --muted: 36 24% 92%;
-  --muted-foreground: 30 8% 38%;
-  --accent: 18 72% 40%;
-  --accent-foreground: 40 40% 98%;
-  --destructive: 0 62% 42%;
+  --background: 214 45% 97%;
+  --foreground: 222 30% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 30% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 30% 12%;
+  --primary: 221 83% 40%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 214 32% 93%;
+  --secondary-foreground: 222 30% 14%;
+  --muted: 214 28% 94%;
+  --muted-foreground: 215 16% 38%;
+  --accent: 46 96% 48%;
+  --accent-foreground: 32 45% 12%;
+  --destructive: 0 72% 42%;
   --destructive-foreground: 0 0% 98%;
-  --border: 34 18% 82%;
-  --input: 34 18% 82%;
-  --ring: 213 52% 24%;
+  --border: 214 22% 86%;
+  --input: 214 22% 86%;
+  --ring: 221 83% 40%;
   --radius: 0.85rem;
 }
 
+/* Member: blue, with yellow highlights and red for problems. */
 .member-theme {
+  --background: 214 48% 97%;
   --primary: 221 83% 40%;
   --primary-foreground: 210 40% 98%;
-  --accent: 0 72% 46%;
-  --accent-foreground: 0 0% 100%;
+  --accent: 46 96% 48%;
+  --accent-foreground: 32 45% 12%;
   --ring: 221 83% 40%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Club Admin: a brighter blue than Headquarters, with the same yellow highlights. Red stays for problems. */
+.admin-theme {
+  --background: 214 40% 97%;
+  --foreground: 217 32% 14%;
+  --card: 214 42% 99%;
+  --card-foreground: 217 32% 14%;
+  --popover: 214 42% 99%;
+  --popover-foreground: 217 32% 14%;
+  --primary: 217 78% 38%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 214 30% 93%;
+  --secondary-foreground: 217 28% 16%;
+  --muted: 214 24% 94%;
+  --muted-foreground: 215 14% 36%;
+  --accent: 46 96% 48%;
+  --accent-foreground: 32 45% 12%;
+  --destructive: 0 72% 42%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 214 24% 86%;
+  --input: 214 24% 86%;
+  --ring: 217 78% 38%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* Super Admin: a deeper blue, with the same yellow highlights. */
+.super-theme {
+  --background: 221 42% 96%;
+  --foreground: 222 35% 12%;
+  --card: 221 45% 99%;
+  --card-foreground: 222 35% 12%;
+  --popover: 221 45% 99%;
+  --popover-foreground: 222 35% 12%;
+  --primary: 221 72% 28%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 221 28% 92%;
+  --secondary-foreground: 222 30% 14%;
+  --muted: 221 22% 93%;
+  --muted-foreground: 221 12% 36%;
+  --accent: 46 96% 48%;
+  --accent-foreground: 32 45% 12%;
+  --border: 221 24% 84%;
+  --input: 221 24% 84%;
+  --ring: 221 72% 28%;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 * { border-color: hsl(var(--border)); }

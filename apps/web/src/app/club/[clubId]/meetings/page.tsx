@@ -16,10 +16,10 @@ import { titleCase, when } from "@/lib/format";
 import type { Meeting, MemberRow } from "@/lib/types";
 
 const badgeTone: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-900",
-  FINALIZED: "bg-sky-100 text-sky-900",
-  COMPLETED: "bg-stone-200 text-stone-700",
-  CANCELLED: "bg-stone-100 text-stone-500",
+  DRAFT: "bg-yellow-100 text-yellow-950",
+  FINALIZED: "bg-blue-100 text-blue-900",
+  COMPLETED: "bg-blue-50 text-blue-800",
+  CANCELLED: "bg-red-50 text-red-800",
 };
 
 export default function ClubMeetingsPage() {

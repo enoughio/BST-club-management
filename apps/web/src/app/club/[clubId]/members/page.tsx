@@ -27,10 +27,10 @@ type Profile = {
 };
 
 const tone: Record<string, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-800",
-  LAPSED: "bg-stone-200 text-stone-700",
-  REMOVED: "bg-stone-200 text-stone-700",
-  EXPIRED: "bg-amber-100 text-amber-900",
+  ACTIVE: "bg-blue-100 text-blue-900",
+  LAPSED: "bg-muted text-muted-foreground",
+  REMOVED: "bg-muted text-muted-foreground",
+  EXPIRED: "bg-yellow-100 text-yellow-950",
 };
 
 function chip(status: string): Filter {
@@ -225,7 +225,7 @@ function MemberFacts({ user, compact = false }: { user: MemberRow["user"]; compa
       <span className="flex flex-wrap items-center gap-1 text-xs">
         {age != null && <span className="text-muted-foreground">{age} years</span>}
         {school && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-900">{school}</span>}
-        {birthday && birthday.days <= 30 && <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-900">Birthday {when(birthday.date.toISOString())}</span>}
+        {birthday && birthday.days <= 30 && <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-950">Birthday {when(birthday.date.toISOString())}</span>}
       </span>
     );
   }

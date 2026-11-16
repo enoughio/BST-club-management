@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { titleCase } from "@/lib/format";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const FILLS = ["#1e3a5f", "#c4a574", "#6b7280", "#8f3d3d"];
+const FILLS = ["hsl(var(--primary))", "hsl(var(--accent))", "hsl(var(--muted-foreground))", "hsl(var(--destructive))"];
 
 export type OrgAnalytics = {
   memberGrowth?: { month: string; joined: number }[];
@@ -93,7 +93,7 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={growth}>
             <Axis />
-            <Bar dataKey="joined" fill="#1e3a5f" name="Joined" />
+            <Bar dataKey="joined" fill="hsl(var(--primary))" name="Joined" />
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -112,7 +112,7 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={meetings}>
             <Axis />
-            <Bar dataKey="meetings" fill="#c4a574" name="Meetings" />
+            <Bar dataKey="meetings" fill="hsl(var(--accent))" name="Meetings" />
           </BarChart>
         </ResponsiveContainer>
       </ChartPanel>
@@ -148,8 +148,8 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
                 <YAxis allowDecimals={false} width={36} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="members" fill="#1e3a5f" name="Members" />
-                <Bar dataKey="growth" fill="#c4a574" name="Growth" />
+                <Bar dataKey="members" fill="hsl(var(--primary))" name="Members" />
+                <Bar dataKey="growth" fill="hsl(var(--accent))" name="Growth" />
               </BarChart>
             </ResponsiveContainer>
           </ChartPanel>
@@ -161,8 +161,8 @@ export function OrgAnalyticsCharts({ data, showComparison = false }: { data: Org
                 <YAxis allowDecimals={false} width={36} unit="%" />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="attendance" fill="#1e3a5f" name="Attendance %" />
-                <Bar dataKey="duesPaid" fill="#6b7280" name="Dues paid %" />
+                <Bar dataKey="attendance" fill="hsl(var(--primary))" name="Attendance %" />
+                <Bar dataKey="duesPaid" fill="hsl(var(--muted-foreground))" name="Dues paid %" />
               </BarChart>
             </ResponsiveContainer>
           </ChartPanel>

@@ -62,7 +62,7 @@ function Profile({ member }: { member: PublicMember }) {
             {adminClubs.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {adminClubs.map((club) => (
-                  <Badge key={club.id} className="bg-violet-100 text-violet-950">Club Admin · {club.name}</Badge>
+                  <Badge key={club.id} className="bg-red-100 text-red-900">Club Admin · {club.name}</Badge>
                 ))}
               </div>
             )}

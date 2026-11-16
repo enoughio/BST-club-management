@@ -59,7 +59,7 @@ export function ActivityPanel({ clubId, publishCount = true }: { clubId: string;
   useEffect(() => { if (publishCount) setAlertCount(critical); }, [critical, publishCount, setAlertCount]);
 
   const feed = notes.filter((note) => new Date(note.createdAt).getTime() >= since);
-  const toneClass = { critical: "bg-red-600 text-white", warning: "bg-amber-500 text-white", info: "bg-sky-600 text-white" };
+  const toneClass = { critical: "bg-red-700 text-white", warning: "bg-yellow-400 text-yellow-950", info: "bg-blue-700 text-white" };
 
   return (
     <div className="flex min-h-full flex-col gap-4 p-4">

@@ -13,7 +13,7 @@ import { titleCase, when } from "@/lib/format";
 import type { Meeting } from "@/lib/types";
 
 const tone: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-900",
+  DRAFT: "bg-yellow-100 text-yellow-950",
   FINALIZED: "bg-blue-100 text-blue-900",
   COMPLETED: "bg-muted text-muted-foreground",
   CANCELLED: "bg-muted text-muted-foreground",

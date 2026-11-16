@@ -18,6 +18,7 @@ export function Sidebar({
   mobile = "tabs",
   menuOpen = false,
   onMenuOpenChange,
+  badge,
 }: {
   title: string;
   items: NavItem[];
@@ -26,6 +27,7 @@ export function Sidebar({
   mobile?: "tabs" | "drawer";
   menuOpen?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
+  badge?: string | null;
 }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
@@ -44,8 +46,9 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="hidden border-r bg-card md:flex md:min-h-full md:flex-col md:gap-1 md:p-4">
-        <Link href={items[0]?.href || "/"} className="mb-4 font-serif text-2xl text-primary">{title}</Link>
+      <aside className={cn("hidden border-r bg-card md:flex md:min-h-full md:flex-col md:gap-1 md:p-4", badge && "border-l-4 border-l-primary bg-primary/5")}>
+        <Link href={items[0]?.href || "/"} className={cn("font-serif text-2xl text-primary", !badge && "mb-4")}>{title}</Link>
+        {badge && <p className="mb-4 w-fit rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">{badge}</p>}
         {items.map((item) => (
           <Link key={item.href} href={item.href} className={itemClass(item.href)}>
             {item.icon}
@@ -69,7 +72,7 @@ export function Sidebar({
       )}
       {mobile === "tabs" && (
         <>
-          <nav className="fixed inset-x-0 bottom-0 z-30 grid border-t bg-card md:hidden" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
+          <nav className={cn("fixed inset-x-0 bottom-0 z-30 grid border-t bg-card md:hidden", badge && "border-t-2 border-primary bg-primary/5")} style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }}>
             {primary.map((item) => (
               <Link key={item.href} href={item.href} className={cn("flex min-h-14 flex-col items-center justify-center px-1 text-center text-[11px]", active(item.href) && "text-primary")}>
                 {item.icon}

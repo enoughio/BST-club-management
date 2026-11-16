@@ -16,7 +16,7 @@ const items = [
 export default function HqLayout({ children }: { children: React.ReactNode }) {
   return (
     <Guard allow={(user) => user.role === "SUPER_ADMIN"}>
-      <AppFrame title="Headquarters" items={items}>{children}</AppFrame>
+      <AppFrame title="Headquarters" items={items} theme="super">{children}</AppFrame>
     </Guard>
   );
 }

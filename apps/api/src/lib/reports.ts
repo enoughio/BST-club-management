@@ -499,8 +499,10 @@ export function pdfBuffer(title: string, lines: string[]) {
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
-    doc.fillColor("#1e3a5f").fontSize(22).text(title);
-    doc.moveDown(0.4);
+    doc.fillColor("#1d4ed8").fontSize(22).text(title);
+    doc.moveDown(0.2);
+    doc.rect(doc.page.margins.left, doc.y, 72, 4).fill("#eab308");
+    doc.moveDown(0.6);
     doc.fillColor("#1c1915").fontSize(11);
     for (const line of lines) doc.text(line).moveDown(0.2);
     doc.end();

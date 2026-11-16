@@ -98,7 +98,7 @@ export default function HqHome() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} width={32} />
               <Tooltip />
-              <Bar dataKey="joined" fill="#1e3a5f" name="New members" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="joined" fill="hsl(var(--primary))" name="New members" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -109,7 +109,7 @@ export default function HqHome() {
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
               <YAxis allowDecimals={false} width={32} />
               <Tooltip />
-              <Bar dataKey="meetings" fill="#c4a574" name="Meetings" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="meetings" fill="hsl(var(--accent))" name="Meetings" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </ChartCard>
@@ -123,8 +123,8 @@ export default function HqHome() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={engagementSlices} dataKey="value" nameKey="name" innerRadius={58} outerRadius={84} startAngle={90} endAngle={-270} stroke="none">
-                      <Cell fill="#1e3a5f" />
-                      <Cell fill="#e7e0d3" />
+                      <Cell fill="hsl(var(--primary))" />
+                      <Cell fill="hsl(var(--muted))" />
                     </Pie>
                     <Tooltip />
                   </PieChart>
@@ -182,9 +182,9 @@ export default function HqHome() {
           </div>
           {stats && (
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-4">
                 <p className="text-sm text-muted-foreground">Total dues collected</p>
-                <p className="font-serif text-3xl text-emerald-800">{money(stats.dues.collectedMinor)}</p>
+                <p className="font-serif text-3xl text-blue-900">{money(stats.dues.collectedMinor)}</p>
               </div>
               <div className={`rounded-lg border p-4 ${stats.dues.outstandingMinor > 0 ? "border-red-200 bg-red-50/50" : ""}`}>
                 <p className="text-sm text-muted-foreground">Total dues outstanding</p>
@@ -204,7 +204,7 @@ export default function HqHome() {
             {!children && <li className="text-muted-foreground">Loading…</li>}
             {children && children.birthdays.length === 0 && <li className="text-muted-foreground">No birthdays in the next 30 days.</li>}
             {children?.birthdays.slice(0, 8).map((row) => (
-              <li key={row.userId} className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-900">
+              <li key={row.userId} className="flex items-center justify-between gap-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-yellow-950">
                 <span className="min-w-0"><span className="block truncate font-medium">{row.name}</span><span className="block truncate text-xs">{row.clubName}</span></span>
                 <span className="shrink-0">{row.days === 0 ? "Today" : `${row.days}d`} · {when(row.date)}</span>
               </li>
@@ -339,11 +339,11 @@ export default function HqHome() {
 }
 
 function dotFor(kind: string) {
-  if (kind.startsWith("club.create")) return "bg-emerald-600";
-  if (kind.startsWith("meeting.finalize")) return "bg-sky-600";
+  if (kind.startsWith("club.create")) return "bg-blue-700";
+  if (kind.startsWith("meeting.finalize")) return "bg-blue-500";
   if (kind.startsWith("meeting.cancel") || kind.startsWith("user.delete") || kind.startsWith("user.freeze") || kind.startsWith("membership.")) return "bg-red-600";
-  if (kind.startsWith("club.")) return "bg-amber-500";
-  return "bg-stone-400";
+  if (kind.startsWith("club.")) return "bg-yellow-400";
+  return "bg-blue-300";
 }
 
 function StatButton({ label, value, hint, onClick }: { label: string; value: string; hint: string; onClick: () => void }) {

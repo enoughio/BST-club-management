@@ -28,7 +28,7 @@ type NodeState = "complete" | "current" | "locked" | "upcoming";
 type Achievement = { id: string; name: string; score: number | null; earnedAt: string | null };
 
 const MEMBER_BLUE = "hsl(221 83% 40%)";
-const STRIP_COLORS = ["bg-blue-700", "bg-emerald-600", "bg-rose-600", "bg-amber-600", "bg-violet-600", "bg-cyan-700"];
+const STRIP_COLORS = ["bg-blue-700", "bg-yellow-400", "bg-red-600", "bg-blue-500", "bg-yellow-500", "bg-red-700"];
 
 export function MemberCurriculum({
   levels,
@@ -144,7 +144,7 @@ export function MemberCurriculum({
           const state = nodeState(view.index);
           const open = isOpen(view.level.id);
           const next = view.index < views.length - 1 ? nodeState(view.index + 1) : null;
-          const connector = next == null ? null : next === "locked" ? "dashed" : state === "complete" ? "green" : "muted";
+          const connector = next == null ? null : next === "locked" ? "dashed" : state === "complete" ? "done" : "muted";
           const requirement = state === "locked" ? lockRequirement(views[view.index - 1]) : null;
           const panelId = `level-panel-${view.level.id}`;
           const active = state === "current" ? activeProject(view.level, view.index, approved, progressById, simulated) : null;
@@ -246,7 +246,7 @@ export function MemberCurriculum({
 function LevelNode({ state, number }: { state: NodeState; number: number }) {
   const className = cn(
     "relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2",
-    state === "complete" && "border-emerald-600 bg-emerald-600 text-white",
+    state === "complete" && "border-blue-700 bg-blue-700 text-white",
     state === "current" && "bg-white shadow-[0_0_0_4px_hsl(221_83%_40%/0.18)]",
     state === "locked" && "border-neutral-300 bg-neutral-200 text-neutral-500",
     state === "upcoming" && "border-neutral-300 bg-white text-neutral-500",
@@ -290,7 +290,7 @@ function ProjectCard({ project, status, row, onSelect, resourcesHref }: {
     <Card className="p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-serif">{project.title || "Untitled project"}</p>
-        <Badge className={status === "Approved" ? "bg-emerald-100 text-emerald-900" : status === "In Progress" ? "bg-blue-100 text-blue-900" : "bg-card text-foreground"}>{status}{row?.approved && row.score != null ? ` · ${row.score}` : ""}</Badge>
+        <Badge className={status === "Approved" ? "bg-blue-700 text-white" : status === "In Progress" ? "bg-yellow-100 text-yellow-950" : "bg-card text-foreground"}>{status}{row?.approved && row.score != null ? ` · ${row.score}` : ""}</Badge>
       </div>
       {project.description && <p className="mt-2 text-sm text-muted-foreground">{project.description}</p>}
       {project.evaluationCriteria && <p className="mt-2 text-sm"><span className="font-medium">Evaluation criteria. </span>{project.evaluationCriteria}</p>}
@@ -307,9 +307,9 @@ function ProjectCard({ project, status, row, onSelect, resourcesHref }: {
   );
 }
 
-function connectorClass(kind: "green" | "dashed" | "muted") {
+function connectorClass(kind: "done" | "dashed" | "muted") {
   if (kind === "dashed") return "absolute bottom-0 left-[22px] top-11 w-0 border-l border-dashed border-neutral-400 sm:border-l-2";
-  if (kind === "green") return "absolute bottom-0 left-[21px] top-11 w-px bg-emerald-600 sm:w-0.5";
+  if (kind === "done") return "absolute bottom-0 left-[21px] top-11 w-px bg-blue-700 sm:w-0.5";
   return "absolute bottom-0 left-[21px] top-11 w-px bg-neutral-300 sm:w-0.5";
 }
 
@@ -464,16 +464,16 @@ async function renderShareCard({ name, percent, completedLevels, achievements }:
   canvas.height = 1350;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not draw the snapshot");
-  ctx.fillStyle = "#f6f1e8";
+  ctx.fillStyle = "#eef3fb";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#1147bb";
+  ctx.fillStyle = "#1d4ed8";
   ctx.fillRect(0, 0, canvas.width, 390);
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 34px Georgia, serif";
   ctx.fillText("Club progress", 72, 110);
   ctx.font = "700 64px Georgia, serif";
   wrapLines(ctx, name, 936).slice(0, 2).forEach((line, index) => ctx.fillText(line, 72, 210 + index * 76));
-  ctx.fillStyle = "#1147bb";
+  ctx.fillStyle = "#1d4ed8";
   ctx.font = "700 128px Georgia, serif";
   ctx.fillText(`${percent}%`, 72, 560);
   ctx.fillStyle = "#3f3a33";
@@ -493,10 +493,12 @@ async function renderShareCard({ name, percent, completedLevels, achievements }:
   } else {
     latest.forEach((item, index) => {
       const y = 1000 + index * 100;
-      ctx.fillStyle = ["#1147bb", "#059669", "#e11d48"][index] || "#1147bb";
+      const fills = ["#1d4ed8", "#eab308", "#dc2626"];
+      const inks = ["#ffffff", "#1c1917", "#ffffff"];
+      ctx.fillStyle = fills[index] || fills[0];
       roundedRect(ctx, 72, y, 936, 84, 18);
       ctx.fill();
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = inks[index] || inks[0];
       ctx.font = "600 28px Georgia, serif";
       ctx.fillText(fitText(ctx, item.name, 880), 96, y + 36);
       ctx.font = "400 22px Georgia, serif";

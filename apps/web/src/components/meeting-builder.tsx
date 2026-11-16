@@ -29,10 +29,10 @@ type Slot = {
 type Project = { id: string; title: string; level?: { name: string } };
 
 const statusTone: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-900",
-  FINALIZED: "bg-sky-100 text-sky-900",
-  COMPLETED: "bg-stone-200 text-stone-700",
-  CANCELLED: "bg-stone-100 text-stone-500",
+  DRAFT: "bg-yellow-100 text-yellow-950",
+  FINALIZED: "bg-blue-100 text-blue-900",
+  COMPLETED: "bg-blue-50 text-blue-800",
+  CANCELLED: "bg-red-50 text-red-800",
 };
 
 /** Minutes between two HH:MM strings; falls back to 120 if either is malformed. */
@@ -183,7 +183,7 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
         </div>
         <p className="text-sm text-muted-foreground">{when(meeting.meetingDate)} · {meeting.startTime}–{meeting.endTime} · {meeting.place}</p>
       </div>
-      {!locked && dirty && <p className="text-sm text-amber-700">Unsaved changes</p>}
+      {!locked && dirty && <p className="text-sm text-yellow-800">Unsaved changes</p>}
     </div>
   );
 
@@ -222,7 +222,7 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
                   {meeting.attendance.map((row) => (
                     <li key={row.id || row.userId} className="flex items-center justify-between py-2">
                       <span>{row.user?.name || "Member"}</span>
-                      <Badge className={row.present ? (row.late ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900") : "bg-muted text-muted-foreground"}>{row.present ? (row.late ? "Late" : "Present") : "Absent"}</Badge>
+                      <Badge className={row.present ? (row.late ? "bg-yellow-100 text-yellow-950" : "bg-blue-100 text-blue-900") : "bg-muted text-muted-foreground"}>{row.present ? (row.late ? "Late" : "Present") : "Absent"}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -364,10 +364,10 @@ export function MeetingBuilder({ meetingId, clubId, canCancel, backHref }: { mee
 }
 
 function ReadyItem({ item, ok, soft = false }: { item: string; ok: boolean; soft?: boolean }) {
-  const tone = ok ? "text-emerald-700" : soft ? "text-amber-700" : "text-destructive";
+  const tone = ok ? "text-blue-700" : soft ? "text-yellow-800" : "text-destructive";
   return (
     <li className={`flex items-center gap-2 ${tone}`}>
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${ok ? "border-emerald-600 bg-emerald-50" : soft ? "border-amber-500 bg-amber-50" : "border-destructive bg-red-50"}`}>{ok && <Check className="h-3 w-3" />}</span>
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${ok ? "border-blue-700 bg-blue-50" : soft ? "border-yellow-500 bg-yellow-50" : "border-destructive bg-red-50"}`}>{ok && <Check className="h-3 w-3" />}</span>
       {item}
     </li>
   );

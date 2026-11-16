@@ -102,9 +102,9 @@ function StaffBadges({ user }: { user: HqMember }) {
   if (user.role !== "SUPER_ADMIN" && clubs.length === 0) return null;
   return (
     <span className="mt-1 flex flex-wrap gap-1">
-      {user.role === "SUPER_ADMIN" && <Badge className="bg-amber-100 text-amber-950">Super Admin</Badge>}
+      {user.role === "SUPER_ADMIN" && <Badge className="bg-blue-100 text-blue-950">Super Admin</Badge>}
       {clubs.map((club) => (
-        <Badge key={club.clubId} className="bg-violet-100 text-violet-950">Club Admin · {club.clubName}</Badge>
+        <Badge key={club.clubId} className="bg-red-100 text-red-900">Club Admin · {club.clubName}</Badge>
       ))}
     </span>
   );

@@ -36,7 +36,7 @@ async function main() {
     data: {
       id: "org",
       name: "Harbour Clubs Headquarters",
-      primaryColor: "#1e3a5f",
+      primaryColor: "#1d4ed8",
       defaultFeeAmount: 150000,
       defaultCurrency: "INR",
       supportEmail: "hq@clubportal.local",

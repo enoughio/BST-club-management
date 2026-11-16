@@ -53,7 +53,7 @@ export function AppFrame({
   onAlerts?: () => void;
   alertsOpen?: boolean;
   nav?: "tabs" | "drawer";
-  theme?: "member";
+  theme?: "member" | "admin" | "super";
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -63,7 +63,15 @@ export function AppFrame({
   const [notesOpen, setNotesOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const fitViewport = pathname === "/hq/curriculum";
+  const themeClass = theme === "member" ? "member-theme" : theme === "admin" ? "admin-theme" : theme === "super" ? "super-theme" : "";
+  const roleLabel = theme === "admin" ? "Club Admin" : theme === "super" ? "Super Admin" : null;
   const [notes, setNotes] = useState<{ id: string; title: string; body: string; readAt: string | null; link: string | null }[]>([]);
+
+  useEffect(() => {
+    if (!themeClass) return;
+    document.body.classList.add(themeClass);
+    return () => document.body.classList.remove(themeClass);
+  }, [themeClass]);
 
   useEffect(() => {
     api<{ notifications: typeof notes }>("/notifications")
@@ -78,13 +86,13 @@ export function AppFrame({
   }
 
   return (
-    <div className={`flex min-h-screen flex-col md:h-screen md:flex-row md:overflow-hidden ${theme === "member" ? "member-theme" : ""}`}>
+    <div className={`flex min-h-screen flex-col md:h-screen md:flex-row md:overflow-hidden ${themeClass}`}>
       <div className="w-full flex-none md:h-full md:w-60 md:overflow-y-auto">
-        <Sidebar title={title} items={items} primaryCount={primaryCount} mobile={nav} menuOpen={menuOpen} onMenuOpenChange={setMenuOpen} onLogout={() => void logout()} />
+        <Sidebar title={title} items={items} primaryCount={primaryCount} mobile={nav} menuOpen={menuOpen} onMenuOpenChange={setMenuOpen} onLogout={() => void logout()} badge={roleLabel} />
       </div>
 
       <div className={`flex min-w-0 flex-grow flex-col md:h-full ${fitViewport ? "md:min-h-0 md:overflow-hidden" : ""} ${nav === "drawer" ? "" : "pb-24 md:pb-0"}`}>
-        <header className="sticky top-0 z-30 flex flex-none items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur md:static">
+        <header className={`sticky top-0 z-30 flex flex-none items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur md:static ${roleLabel ? "border-primary/30 bg-primary/5" : "bg-background/95"}`}>
           <div className="flex min-w-0 items-center gap-2">
             {nav === "drawer" && (
               <Button variant="outline" size="icon" className="md:hidden" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
@@ -92,7 +100,10 @@ export function AppFrame({
               </Button>
             )}
             <div className="min-w-0">
-              <p className="truncate font-serif text-lg leading-none">{title}</p>
+              <p className="flex flex-wrap items-center gap-2 font-serif text-lg leading-none">
+                {title}
+                {roleLabel && <span className="rounded-full bg-primary px-2 py-0.5 font-sans text-[11px] font-medium tracking-normal text-primary-foreground">{roleLabel}</span>}
+              </p>
               <p className="truncate text-xs text-muted-foreground">{user?.name}</p>
             </div>
           </div>

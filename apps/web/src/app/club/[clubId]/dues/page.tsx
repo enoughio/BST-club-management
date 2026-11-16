@@ -15,7 +15,7 @@ type Invoice = { id: string; amount: number; currency: string; status: string; m
 type Filter = "ALL" | "UNPAID" | "PAID" | "WAIVED";
 
 const tone: Record<string, string> = {
-  PAID: "bg-emerald-100 text-emerald-900",
+  PAID: "bg-blue-100 text-blue-900",
   UNPAID: "bg-red-100 text-red-900",
   WAIVED: "bg-muted text-muted-foreground",
 };

@@ -12,8 +12,8 @@ import { relativeWhen, when } from "@/lib/format";
 import type { MemberRow } from "@/lib/types";
 
 const tone: Record<string, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-900",
-  EXPIRED: "bg-amber-100 text-amber-900",
+  ACTIVE: "bg-blue-100 text-blue-900",
+  EXPIRED: "bg-yellow-100 text-yellow-950",
   LAPSED: "bg-muted text-muted-foreground",
   REMOVED: "bg-muted text-muted-foreground",
 };
@@ -58,7 +58,7 @@ export default function OfficerMembersPage() {
               <span className="mt-1 flex flex-wrap gap-1 text-xs">
                 {row.user.dateOfBirth && <span className="text-muted-foreground">{ageOn(row.user.dateOfBirth)} years</span>}
                 {(row.user.grade || row.user.school) && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-900">{[gradeLabel(row.user.grade), row.user.school].filter(Boolean).join(" · ")}</span>}
-                {row.user.dateOfBirth && (() => { const birthday = nextBirthday(row.user.dateOfBirth); return birthday && birthday.days <= 30 ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-900">Birthday {when(birthday.date.toISOString())}</span> : null; })()}
+                {row.user.dateOfBirth && (() => { const birthday = nextBirthday(row.user.dateOfBirth); return birthday && birthday.days <= 30 ? <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-950">Birthday {when(birthday.date.toISOString())}</span> : null; })()}
               </span>
               {row.user.guardianName && <span className="block text-xs text-muted-foreground">{row.user.guardianName}{row.user.guardianPhone ? ` · ${row.user.guardianPhone}` : ""}</span>}
             </span>

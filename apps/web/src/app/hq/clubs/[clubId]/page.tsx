@@ -30,10 +30,10 @@ type Pending =
   | { kind: "delete" }
   | null;
 
-const statusTone: Record<string, string> = { ACTIVE: "bg-emerald-100 text-emerald-900", PROVISIONAL: "bg-sky-100 text-sky-900", INACTIVE: "bg-amber-100 text-amber-900" };
-const memberTone: Record<string, string> = { ACTIVE: "bg-emerald-100 text-emerald-900", EXPIRED: "bg-amber-100 text-amber-900", LAPSED: "bg-muted text-muted-foreground", REMOVED: "bg-muted text-muted-foreground" };
-const meetingTone: Record<string, string> = { DRAFT: "bg-amber-100 text-amber-900", FINALIZED: "bg-sky-100 text-sky-900", COMPLETED: "bg-stone-200 text-stone-700", CANCELLED: "bg-stone-100 text-stone-500" };
-const flagTone: Record<string, string> = { REVIEW: "bg-amber-100 text-amber-900", RISK: "bg-red-100 text-red-900", SUPPORT: "bg-sky-100 text-sky-900", INFO: "bg-muted text-muted-foreground" };
+const statusTone: Record<string, string> = { ACTIVE: "bg-blue-100 text-blue-900", PROVISIONAL: "bg-yellow-100 text-yellow-950", INACTIVE: "bg-red-100 text-red-900" };
+const memberTone: Record<string, string> = { ACTIVE: "bg-blue-100 text-blue-900", EXPIRED: "bg-yellow-100 text-yellow-950", LAPSED: "bg-muted text-muted-foreground", REMOVED: "bg-muted text-muted-foreground" };
+const meetingTone: Record<string, string> = { DRAFT: "bg-yellow-100 text-yellow-950", FINALIZED: "bg-blue-100 text-blue-900", COMPLETED: "bg-blue-50 text-blue-800", CANCELLED: "bg-red-50 text-red-800" };
+const flagTone: Record<string, string> = { REVIEW: "bg-yellow-100 text-yellow-950", RISK: "bg-red-100 text-red-900", SUPPORT: "bg-blue-100 text-blue-900", INFO: "bg-muted text-muted-foreground" };
 const PAGE = 10;
 
 type ProfileDraft = { name: string; city: string; address: string; meetingSchedule: string; description: string };
@@ -276,7 +276,7 @@ export default function HqClubPage() {
           <div className="flex items-center justify-between gap-2 rounded-lg border border-dashed p-3">
             <div className="min-w-0">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Club Admin (portal)</p>
-              <p className="truncate text-sm font-medium">{club.currentAdmin?.name || <span className="text-amber-800">Not appointed</span>}</p>
+              <p className="truncate text-sm font-medium">{club.currentAdmin?.name || <span className="text-yellow-800">Not appointed</span>}</p>
               {club.currentAdmin && <button type="button" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => { void navigator.clipboard.writeText(club.currentAdmin!.email); toast.success("Email copied"); }}><Copy className="h-3 w-3" /> Copy email</button>}
             </div>
             <Avatar name={club.currentAdmin?.name} size="sm" />
@@ -304,7 +304,7 @@ export default function HqClubPage() {
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                     <Badge className={memberTone[row.status] || ""}>{row.status === "EXPIRED" ? "Probationary" : row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge>
                     <span className="text-muted-foreground">{row.lastAttendanceAt ? `Last attendance ${when(row.lastAttendanceAt)}` : "No attendance"}</span>
-                    <span>{row.dues ? <span className={row.dues.status === "PAID" ? "text-emerald-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</span>
+                    <span>{row.dues ? <span className={row.dues.status === "PAID" ? "text-blue-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</span>
                     <span className="text-muted-foreground">Joined {when(row.joinedAt)}</span>
                   </div>
                 </Card>
@@ -326,7 +326,7 @@ export default function HqClubPage() {
                       </td>
                       <td className="p-3"><Badge className={memberTone[row.status] || ""}>{row.status === "EXPIRED" ? "Probationary" : row.status === "ACTIVE" ? "Active" : "Inactive"}</Badge></td>
                       <td className="p-3">{row.lastAttendanceAt ? when(row.lastAttendanceAt) : <span className="text-muted-foreground">Never</span>}</td>
-                      <td className="p-3">{row.dues ? <span className={row.dues.status === "PAID" ? "text-emerald-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</td>
+                      <td className="p-3">{row.dues ? <span className={row.dues.status === "PAID" ? "text-blue-800" : row.dues.status === "UNPAID" ? "text-red-700" : "text-muted-foreground"}>{titleCase(row.dues.status)} · {money(row.dues.amount, club.currency)}</span> : <span className="text-muted-foreground">No invoice</span>}</td>
                       <td className="p-3 text-muted-foreground">{when(row.joinedAt)}</td>
                     </tr>
                   ))}

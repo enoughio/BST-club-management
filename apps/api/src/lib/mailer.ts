@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 
 const BRAND_BLUE = "#1d4ed8";
+const BRAND_YELLOW = "#eab308";
 const BRAND_RED = "#dc2626";
 const PORTAL_NAME = "Club portal";
 
@@ -97,6 +98,9 @@ function renderEmail(input: {
             <td bgcolor="${BRAND_BLUE}" style="background-color:${BRAND_BLUE};padding:18px 24px;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:1.3;font-weight:bold;color:#ffffff;">
               ${org}
             </td>
+          </tr>
+          <tr>
+            <td bgcolor="${BRAND_YELLOW}" style="background-color:${BRAND_YELLOW};height:6px;font-size:0;line-height:0;">&nbsp;</td>
           </tr>
           <tr>
             <td style="padding:24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;">

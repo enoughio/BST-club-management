@@ -254,7 +254,7 @@ settingsRouter.get(
         id: "org",
         name: "Club Portal",
         logoKey: null,
-        primaryColor: "#1e3a5f",
+        primaryColor: "#1d4ed8",
         defaultFeeAmount: 150000,
         defaultCurrency: "INR",
         supportEmail: null,
@@ -283,7 +283,7 @@ settingsRouter.patch(
       create: {
         id: "org",
         name: body.name || "Club Portal",
-        primaryColor: body.primaryColor || "#1e3a5f",
+        primaryColor: body.primaryColor || "#1d4ed8",
         defaultFeeAmount: body.defaultFeeAmount || 150000,
         defaultCurrency: body.defaultCurrency || "INR",
         supportEmail: body.supportEmail || null,

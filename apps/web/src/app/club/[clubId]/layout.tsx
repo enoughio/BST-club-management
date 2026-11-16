@@ -38,9 +38,9 @@ export default function ClubLayout({ children }: { children: React.ReactNode }) 
   return (
     <Guard allow={(me) => me.role === "SUPER_ADMIN" || me.adminClubs.some((club) => club.clubId === clubId)}>
       <DashboardProvider>
-        <AppFrame title="Club" items={items} alertsOpen={alertsOpen} onAlerts={() => setAlertsOpen((open) => !open)}>
+        <AppFrame title="Club" items={items} theme="admin" alertsOpen={alertsOpen} onAlerts={() => setAlertsOpen((open) => !open)}>
           {preview && (
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
               <span className="flex items-center gap-2"><Eye className="h-4 w-4" /> Viewing as Club Admin (headquarters preview). Changes you make here are real.</span>
               <Link href={`/hq/clubs/${clubId}`} className="font-medium underline">Back to HQ view</Link>
             </div>

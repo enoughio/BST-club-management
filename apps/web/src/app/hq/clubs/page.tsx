@@ -22,9 +22,9 @@ type Sort = "name" | "members" | "activity";
 type Action = { kind: "suspend" | "reactivate" | "reset"; club: Club } | null;
 
 const statusTone: Record<string, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-900",
-  PROVISIONAL: "bg-sky-100 text-sky-900",
-  INACTIVE: "bg-amber-100 text-amber-900",
+  ACTIVE: "bg-blue-100 text-blue-900",
+  PROVISIONAL: "bg-yellow-100 text-yellow-950",
+  INACTIVE: "bg-red-100 text-red-900",
 };
 
 export default function HqClubsPage() {
@@ -131,7 +131,7 @@ export default function HqClubsPage() {
       <PageIntro title="Clubs" lede={`${clubs.length} club${clubs.length === 1 ? "" : "s"} · each has one current Club Admin.`} actions={<Button onClick={() => setOpen(true)}>Add club</Button>} />
 
       {paused.length > 0 && filter !== "INACTIVE" && (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-950">
           <PauseCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{paused.length === 1 ? `${paused[0].name} is paused and not running meetings.` : `${paused.length} clubs are paused and not running meetings.`} <button type="button" className="underline" onClick={() => setFilter("INACTIVE")}>Show paused clubs</button></p>
         </div>
@@ -161,13 +161,13 @@ export default function HqClubsPage() {
           const inactive = club.status === "INACTIVE";
           const stats = club.stats;
           return (
-            <div key={club.id} role="link" tabIndex={0} onClick={() => router.push(`/hq/clubs/${club.id}`)} onKeyDown={(event) => { if (event.key === "Enter") router.push(`/hq/clubs/${club.id}`); }} className={`group relative cursor-pointer rounded-xl border p-4 transition hover:border-primary hover:shadow-sm ${inactive ? "border-amber-300 bg-amber-50/60" : "bg-card"}`}>
+            <div key={club.id} role="link" tabIndex={0} onClick={() => router.push(`/hq/clubs/${club.id}`)} onKeyDown={(event) => { if (event.key === "Enter") router.push(`/hq/clubs/${club.id}`); }} className={`group relative cursor-pointer rounded-xl border p-4 transition hover:border-primary hover:shadow-sm ${inactive ? "border-yellow-300 bg-yellow-50/70" : "bg-card"}`}>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-serif text-xl">{club.name}</p>
                     <Badge className={statusTone[club.status] || ""}>{titleCase(club.status)}</Badge>
-                    {inactive && <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-800"><PauseCircle className="h-3.5 w-3.5" /> Paused</span>}
+                    {inactive && <span className="inline-flex items-center gap-1 text-xs font-medium text-yellow-800"><PauseCircle className="h-3.5 w-3.5" /> Paused</span>}
                   </div>
                   <p className="text-sm text-muted-foreground">{club.city}</p>
                   <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
@@ -183,7 +183,7 @@ export default function HqClubsPage() {
                         <span className="font-medium">{club.currentAdmin.name}</span>
                         <button type="button" className="rounded p-1 text-muted-foreground hover:bg-muted" title={`Copy ${club.currentAdmin.email}`} aria-label="Copy admin email" onClick={(event) => { event.stopPropagation(); copy(club.currentAdmin!.email); }}><Copy className="h-3.5 w-3.5" /></button>
                       </>
-                    ) : <span className="text-amber-800">Not appointed</span>}
+                    ) : <span className="text-yellow-800">Not appointed</span>}
                   </div>
                 </div>
 
@@ -191,7 +191,7 @@ export default function HqClubsPage() {
                   <dl className="grid flex-1 grid-cols-3 gap-2 text-center">
                     <div className="rounded-lg bg-muted/60 p-2"><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Members</dt><dd className="font-serif text-xl">{stats?.totalMembers ?? "—"}</dd><dd className="text-[11px] text-muted-foreground">{stats?.activeMembers ?? 0} active</dd></div>
                     <div className="rounded-lg bg-muted/60 p-2"><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Last meeting</dt><dd className="text-sm font-medium">{stats?.lastMeetingAt ? when(stats.lastMeetingAt) : "None"}</dd></div>
-                    <div className={`rounded-lg p-2 ${stats && stats.unpaidCount > 0 ? "bg-red-50" : "bg-muted/60"}`}><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Dues</dt><dd className={`text-sm font-medium ${stats && stats.unpaidCount > 0 ? "text-red-700" : "text-emerald-800"}`}>{stats && stats.unpaidCount > 0 ? `${stats.unpaidCount} unpaid` : "Clear"}</dd>{stats && stats.unpaidCount > 0 && <dd className="text-[11px] text-muted-foreground">{money(stats.unpaidMinor, club.currency)}</dd>}</div>
+                    <div className={`rounded-lg p-2 ${stats && stats.unpaidCount > 0 ? "bg-red-50" : "bg-muted/60"}`}><dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Dues</dt><dd className={`text-sm font-medium ${stats && stats.unpaidCount > 0 ? "text-red-700" : "text-blue-800"}`}>{stats && stats.unpaidCount > 0 ? `${stats.unpaidCount} unpaid` : "Clear"}</dd>{stats && stats.unpaidCount > 0 && <dd className="text-[11px] text-muted-foreground">{money(stats.unpaidMinor, club.currency)}</dd>}</div>
                   </dl>
                   <div className="relative">
                     <Button variant="outline" size="icon" className="h-9 w-9 opacity-100 lg:opacity-0 lg:transition lg:group-hover:opacity-100 lg:focus:opacity-100" aria-label={`Actions for ${club.name}`} onClick={(event) => { event.stopPropagation(); setMenuFor(menuFor === club.id ? null : club.id); }}><MoreHorizontal className="h-4 w-4" /></Button>

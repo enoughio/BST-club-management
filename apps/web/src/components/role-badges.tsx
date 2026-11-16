@@ -18,9 +18,9 @@ export function MemberRoleBadges({ offices, isClubAdmin, className }: { offices?
   if (!isClubAdmin && titles.length === 0) return null;
   return (
     <span className={className ?? "mt-1 flex flex-wrap gap-1"}>
-      {isClubAdmin && <Badge className="bg-violet-100 text-violet-950">Club Admin</Badge>}
+      {isClubAdmin && <Badge className="bg-red-100 text-red-900">Club Admin</Badge>}
       {titles.map((title) => (
-        <Badge key={title} className="bg-sky-100 text-sky-950">{titleCase(title)}</Badge>
+        <Badge key={title} className="bg-blue-100 text-blue-950">{titleCase(title)}</Badge>
       ))}
     </span>
   );
