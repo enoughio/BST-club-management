@@ -118,8 +118,17 @@ function ChildFacts({ user }: { user: HqMember }) {
   );
 }
 
-export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
-  const [menu, setMenu] = useState(false);
+export function MemberActions({ user, onChanged, open, onOpenChange, showButton = true }: { user: HqMember; onChanged: () => void; open?: boolean; onOpenChange?: (open: boolean) => void; showButton?: boolean }) {
+  const [menu, setMenuState] = useState(false);
+  const shown = open ?? menu;
+  function setMenu(next: boolean) {
+    if (next) {
+      setDraft(draftFrom(user));
+      setEditing(false);
+    }
+    setMenuState(next);
+    onOpenChange?.(next);
+  }
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [freezeOpen, setFreezeOpen] = useState(false);
@@ -192,8 +201,8 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => { setDraft(draftFrom(user)); setEditing(false); setMenu(true); }}>Actions</Button>
-      <Sheet open={menu} onOpenChange={setMenu} title={editing ? "Edit profile" : user.name}>
+      {showButton && <Button variant="outline" size="sm" onClick={() => setMenu(true)}>Actions</Button>}
+      <Sheet open={shown} onOpenChange={setMenu} title={editing ? "Edit profile" : user.name}>
         {editing ? (
           <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); setEditOpen(true); }}>
             <Field label="Name"><Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></Field>
@@ -237,6 +246,7 @@ export function MemberActions({ user, onChanged }: { user: HqMember; onChanged: 
                 </div>
               ))}
             </div>
+            <Button variant="outline" asChild><Link href={`/hq/members/${user.id}`}>View complete profile</Link></Button>
             <Button variant="outline" asChild><Link href={`/members/${user.id}`}>Public directory card</Link></Button>
             <Button variant="outline" onClick={() => setEditing(true)}>Edit profile</Button>
             <Button variant="outline" onClick={() => { closeMenus(); setFreezeOpen(true); }}>Freeze</Button>

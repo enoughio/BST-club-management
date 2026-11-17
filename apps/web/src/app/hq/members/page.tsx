@@ -23,6 +23,7 @@ export default function HqMembersPage() {
   const [pageSize, setPageSize] = useState(LIMIT);
   const [users, setUsers] = useState<HqMember[]>([]);
   const [ready, setReady] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   function load() {
     api<{ users: HqMember[]; total: number; page: number; pageSize: number }>(`/users?q=${encodeURIComponent(applied)}&page=${page}&limit=${LIMIT}`)
@@ -38,6 +39,7 @@ export default function HqMembersPage() {
   useEffect(load, [applied, page]);
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
+  const openUser = users.find((user) => user.id === openId) ?? null;
 
   return (
     <div>
@@ -56,7 +58,7 @@ export default function HqMembersPage() {
       {ready && (
         <>
           <div className="flex flex-col gap-3 md:hidden">
-            {users.map((user) => <MemberCard key={user.id} user={user} onChanged={load} />)}
+            {users.map((user) => <MemberCard key={user.id} user={user} onOpen={() => setOpenId(user.id)} />)}
           </div>
           <div className="hidden overflow-x-auto rounded-xl border md:block">
             <table className="w-full min-w-[720px] text-left text-sm">
@@ -65,7 +67,7 @@ export default function HqMembersPage() {
                 {users.map((user) => (
                   <tr key={user.id} className="border-t">
                     <td className="p-3">
-                      <Link href={`/members/${user.id}`}>{user.name}</Link>
+                      <button type="button" className="font-medium hover:underline" onClick={() => setOpenId(user.id)}>{user.name}</button>
                       <StaffBadges user={user} />
                       {user.dateOfBirth && <span className="block text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</span>}
                       <SchoolBadge user={user} />
@@ -73,7 +75,7 @@ export default function HqMembersPage() {
                     <td className="p-3">{user.email}</td>
                     <td className="p-3">{titleCase(user.status)}</td>
                     <td className="p-3">{user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</td>
-                    <td className="p-3"><MemberActions user={user} onChanged={load} /></td>
+                    <td className="p-3"><Button variant="outline" size="sm" onClick={() => setOpenId(user.id)}>Actions</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -85,6 +87,16 @@ export default function HqMembersPage() {
             <p className="text-center text-sm">Page {page} of {pages}</p>
             <Button variant="outline" disabled={page >= pages} onClick={() => setPage((current) => current + 1)}>Next</Button>
           </div>
+          {openUser && (
+            <MemberActions
+              key={openUser.id}
+              user={openUser}
+              onChanged={load}
+              open
+              showButton={false}
+              onOpenChange={(next) => { if (!next) setOpenId(null); }}
+            />
+          )}
         </>
       )}
     </div>
@@ -110,16 +122,16 @@ function StaffBadges({ user }: { user: HqMember }) {
   );
 }
 
-function MemberCard({ user, onChanged }: { user: HqMember; onChanged: () => void }) {
+function MemberCard({ user, onOpen }: { user: HqMember; onOpen: () => void }) {
   return (
     <Card className="p-4">
-      <Link href={`/members/${user.id}`} className="font-medium">{user.name}</Link>
+      <button type="button" className="text-left font-medium hover:underline" onClick={onOpen}>{user.name}</button>
       <StaffBadges user={user} />
       <p className="text-sm text-muted-foreground">{user.email}</p>
       {user.dateOfBirth && <p className="text-xs text-muted-foreground">{ageOn(user.dateOfBirth)} years · next birthday {when(nextBirthday(user.dateOfBirth)!.date.toISOString())}</p>}
       <SchoolBadge user={user} />
       <p className="text-sm">{titleCase(user.status)} · {user.memberships.map((row) => `${row.clubName} (${titleCase(row.status)})`).join(", ") || "No club"}</p>
-      <div className="mt-3"><MemberActions user={user} onChanged={onChanged} /></div>
+      <div className="mt-3"><Button variant="outline" size="sm" onClick={onOpen}>Actions</Button></div>
     </Card>
   );
 }

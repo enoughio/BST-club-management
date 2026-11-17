@@ -297,7 +297,7 @@ export default function HqClubPage() {
               {pageRows.length === 0 && <p className="text-sm text-muted-foreground">No members yet.</p>}
               {pageRows.map((row) => (
                 <Card key={row.membershipId} className="p-4">
-                  <Link href={`/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link>
+                  <Link href={`/hq/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link>
                   <MemberRoleBadges offices={row.offices} isClubAdmin={club.currentAdmin?.id === row.user.id} />
                   {!row.offices.length && club.currentAdmin?.id !== row.user.id && <p className="mt-1 text-xs text-muted-foreground">Member</p>}
                   <p className="truncate text-sm text-muted-foreground">{row.user.email}</p>
@@ -319,7 +319,7 @@ export default function HqClubPage() {
                   {pageRows.length === 0 && <tr><td className="p-3 text-muted-foreground" colSpan={6}>No members yet.</td></tr>}
                   {pageRows.map((row) => (
                     <tr key={row.membershipId} className="border-t">
-                      <td className="p-3"><Link href={`/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link><p className="max-w-[16rem] truncate text-xs text-muted-foreground">{row.user.email}</p></td>
+                      <td className="p-3"><Link href={`/hq/members/${row.user.id}`} className="font-medium hover:underline">{row.user.name}</Link><p className="max-w-[16rem] truncate text-xs text-muted-foreground">{row.user.email}</p></td>
                       <td className="p-3">
                         <MemberRoleBadges offices={row.offices} isClubAdmin={club.currentAdmin?.id === row.user.id} className="flex flex-wrap gap-1" />
                         {!row.offices.length && club.currentAdmin?.id !== row.user.id && <span className="text-muted-foreground">Member</span>}
