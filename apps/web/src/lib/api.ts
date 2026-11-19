@@ -6,7 +6,17 @@ export class ApiError extends Error {
   }
 }
 
-const base = () => process.env.NEXT_PUBLIC_API_URL || "";
+/**
+ * Browser calls use the public `/api` rewrite on this host.
+ * Server-side calls use API_URL, which Vercel injects from the web service's binding to api.
+ * NEXT_PUBLIC_API_URL is only for local dev, where the API is a separate origin.
+ */
+function apiOrigin() {
+  if (typeof window === "undefined" && process.env.API_URL) {
+    return process.env.API_URL.replace(/\/$/, "");
+  }
+  return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+}
 
 async function parse(res: Response) {
   const text = await res.text();
@@ -22,7 +32,7 @@ let refresh: Promise<boolean> | null = null;
 
 async function refreshSession() {
   if (!refresh) {
-    refresh = fetch(`${base()}/api/v1/auth/refresh`, {
+    refresh = fetch(`${apiOrigin()}/api/v1/auth/refresh`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -41,7 +51,7 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(`${base()}/api/v1${path}`, { ...init, headers, credentials: "include" });
+  const res = await fetch(`${apiOrigin()}/api/v1${path}`, { ...init, headers, credentials: "include" });
   if (res.status === 401 && retry && !path.startsWith("/auth/")) {
     const ok = await refreshSession();
     if (ok) return api<T>(path, init, false);
@@ -57,5 +67,5 @@ export async function api<T>(path: string, init: RequestInit = {}, retry = true)
 }
 
 export function fileUrl(path: string) {
-  return `${base()}${path}`;
+  return `${apiOrigin()}${path}`;
 }
