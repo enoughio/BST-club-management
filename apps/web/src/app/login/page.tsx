@@ -38,7 +38,7 @@ export default function LoginPage() {
       <Card className="w-full">
         <CardHeader>
           <CardTitle>Sign in</CardTitle>
-          <p className="text-sm text-muted-foreground">Sign in with the email and password for your account.</p>
+          <p className="text-sm text-muted-foreground">Sign in with the email and password for your account. </p>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={submit}>
