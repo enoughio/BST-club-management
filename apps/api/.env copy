@@ -1,0 +1,41 @@
+DATABASE_URL=postgresql://club:club@localhost:5432/clubportal
+WEB_ORIGIN=http://localhost:3000
+API_PORT=4000
+JWT_ACCESS_SECRET=dev-access-secret-change-me-please-32b
+JWT_REFRESH_SECRET=dev-refresh-secret-change-me-please-32
+COOKIE_SECURE=false
+COOKIE_SAMESITE=lax
+
+# Gmail
+GMAIL_USER=aniketjatav.dev@gmail.com
+GMAIL_APP_PASSWORD=rqzseubxapexghqx
+MAIL_FROM=aniketjatav.dev@gmail.com
+
+
+RAZORPAY_KEY_ID=rzp_test_SMMeY42OsGxo37
+RAZORPAY_KEY_SECRET=XlT4hYe7ad7RpGcoT3V59MiG
+RAZORPAY_WEBHOOK_SECRET=
+
+STORAGE_DRIVER=s3
+STORAGE_LOCAL_DIR=uploads
+S3_ENDPOINT=
+S3_REGION=us-east-1
+S3_BUCKET=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_FORCE_PATH_STYLE=true
+
+
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:hq@clubportal.local
+
+
+# Cloudflare R2
+R2_ACCOUNT_ID="d0b08e7bda29755e0fe260ad32c08ebd"
+R2_ACCESS_KEY_ID="35317bf1b58d527031d37adb2c9223b0"
+R2_SECRET_ACCESS_KEY="67daec073b072cbf2527ab36d312bedd62ddf898a087c18d1fc5cfb004cca4e6"
+R2_BUCKET_NAME="ylcportal"
+
+# Optional: public file domain
+R2_PUBLIC_URL="https://d0b08e7bda29755e0fe260ad32c08ebd.r2.cloudflarestorage.com"

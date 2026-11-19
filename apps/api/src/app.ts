@@ -75,3 +75,5 @@ export function createApp() {
   app.use(errorMiddleware);
   return app;
 }
+
+export default createApp();
