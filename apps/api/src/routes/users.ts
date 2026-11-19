@@ -342,6 +342,56 @@ usersRouter.post(
   }),
 );
 
+usersRouter.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    requireSuperAdmin(req);
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: {
+        memberships: {
+          include: { club: { select: { id: true, name: true, city: true } } },
+          orderBy: { joinedAt: "desc" },
+        },
+        adminAppointments: {
+          where: { endedAt: null },
+          select: { clubId: true, club: { select: { name: true } } },
+        },
+        officerRoles: {
+          where: { endedAt: null },
+          select: { clubId: true, title: true, club: { select: { name: true } } },
+        },
+      },
+    });
+    if (!user) throw new HttpError(404, "User not found");
+    res.json({
+      user: {
+        ...userCore(user),
+        adminClubs: user.adminAppointments.map((row) => ({
+          clubId: row.clubId,
+          clubName: row.club.name,
+        })),
+        offices: user.officerRoles.map((row) => ({
+          clubId: row.clubId,
+          clubName: row.club.name,
+          title: row.title,
+        })),
+        memberships: user.memberships.map((row) => ({
+          id: row.id,
+          clubId: row.clubId,
+          clubName: row.club.name,
+          clubCity: row.club.city,
+          status: row.status,
+          joinedAt: row.joinedAt,
+          endedAt: row.endedAt,
+          gradeAtJoin: row.gradeAtJoin,
+          ...membershipTenure(row),
+        })),
+      },
+    });
+  }),
+);
+
 usersRouter.patch(
   "/:id",
   asyncHandler(async (req, res) => {
