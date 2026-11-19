@@ -22,7 +22,7 @@ type MembershipRow = HqMember["memberships"][number] & {
   gradeAtJoin?: string | null;
 };
 
-type MemberDetail = HqMember & {
+type MemberDetail = Omit<HqMember, "offices" | "memberships"> & {
   avatarUrl?: string | null;
   offices?: { clubId: string; clubName?: string; title: string }[];
   memberships: MembershipRow[];
@@ -35,7 +35,7 @@ const membershipTone: Record<string, string> = {
   REMOVED: "bg-muted text-muted-foreground",
 };
 
-export function HqMemberProfile({ userId }: { userId: string }) {
+function HqMemberProfile({ userId }: { userId: string }) {
   const [user, setUser] = useState<MemberDetail | null>(null);
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
