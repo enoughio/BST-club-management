@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { Toaster } from "sonner";
 import { SessionProvider } from "@/lib/session";
 import "./globals.css";
@@ -18,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${sans.variable} ${serif.variable} font-sans antialiased`}>
         <SessionProvider>
           {children}
+          <Analytics />
           <Toaster richColors position="top-center" />
         </SessionProvider>
       </body>
