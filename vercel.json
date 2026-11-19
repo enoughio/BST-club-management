@@ -4,7 +4,7 @@
     "api": {
       "root": "apps/api",
       "framework": "express",
-      "buildCommand": "prisma generate"
+      "buildCommand": "npm run build"
     },
     "web": {
       "root": "apps/web",
